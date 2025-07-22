@@ -121,7 +121,7 @@ export class StoreInspector {
 
 // Attach to window in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  (window as any).__todoStoreInspector = StoreInspector.getInstance();
+  (window as Window & { __todoStoreInspector?: StoreInspector }).__todoStoreInspector = StoreInspector.getInstance();
   console.log('Todo Store Inspector available at: window.__todoStoreInspector');
   console.log('Available methods: logState(), getState(), getTodosByStatus(), findTodos(), getMetrics(), exportState(), reset()');
 }

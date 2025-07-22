@@ -9,28 +9,33 @@ import { useTodoStore } from '@/stores/todos/todo-store';
  */
 export function DebugPanel() {
   const [isOpen, setIsOpen] = useState(false);
-  const [metrics, setMetrics] = useState<any>(null);
+  const [metrics, setMetrics] = useState<{
+    completionRate: string;
+    averageAge: number;
+    oldestTodo: string | null;
+    newestTodo: string | null;
+  } | null>(null);
   const todos = useTodoStore((state) => state.todos);
   const filter = useTodoStore((state) => state.filter);
   const error = useTodoStore((state) => state.error);
   const isLoading = useTodoStore((state) => state.isLoading);
 
-  // Only render in development
-  if (process.env.NODE_ENV !== 'development') {
-    return null;
-  }
-
   useEffect(() => {
     if (isOpen) {
-      const inspector = (window as any).__todoStoreInspector;
+      const inspector = (window as Window & { __todoStoreInspector?: { getMetrics: () => typeof metrics } }).__todoStoreInspector;
       if (inspector) {
         setMetrics(inspector.getMetrics());
       }
     }
   }, [isOpen, todos]);
 
+  // Only render in development
+  if (process.env.NODE_ENV !== 'development') {
+    return null;
+  }
+
   const exportState = () => {
-    const inspector = (window as any).__todoStoreInspector;
+    const inspector = (window as Window & { __todoStoreInspector?: { exportState: () => string } }).__todoStoreInspector;
     if (inspector) {
       const data = inspector.exportState();
       const blob = new Blob([data], { type: 'application/json' });
@@ -103,7 +108,7 @@ export function DebugPanel() {
                 </button>
                 <button
                   onClick={() => {
-                    const inspector = (window as any).__todoStoreInspector;
+                    const inspector = (window as Window & { __todoStoreInspector?: { logState: (label: string) => void } }).__todoStoreInspector;
                     if (inspector) {
                       inspector.logState('Debug Panel Log');
                     }

@@ -116,7 +116,9 @@ describe('TodoItem', () => {
     await user.clear(input);
     await user.type(input, 'Updated todo{enter}');
     
-    expect(mockUpdateTodo).toHaveBeenCalledWith('test-123', 'Updated todo');
+    await waitFor(() => {
+      expect(mockUpdateTodo).toHaveBeenCalledWith('test-123', 'Updated todo');
+    });
   });
 
   it('should save edited text on blur', async () => {
@@ -131,9 +133,13 @@ describe('TodoItem', () => {
     await user.type(input, 'Updated todo');
     
     // Blur the input
-    fireEvent.blur(input);
+    await act(async () => {
+      fireEvent.blur(input);
+    });
     
-    expect(mockUpdateTodo).toHaveBeenCalledWith('test-123', 'Updated todo');
+    await waitFor(() => {
+      expect(mockUpdateTodo).toHaveBeenCalledWith('test-123', 'Updated todo');
+    });
   });
 
   it('should cancel edit on Escape key', async () => {
@@ -242,10 +248,18 @@ describe('TodoItem', () => {
     const input = screen.getByLabelText('Edit todo text');
     await user.clear(input);
     await user.type(input, 'Updated text');
-    await user.type(input, '{enter}');
+    
+    // Submit with Enter key within act
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      // Wait for async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
     
     // Should show error
-    expect(await screen.findByText('Update failed')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Update failed')).toBeInTheDocument();
+    });
     expect(input).toHaveValue('Updated text'); // Input should remain in edit mode
   });
 

@@ -27,5 +27,5 @@ export const devtools = <T extends object>(
     name,
     anonymousActionType,
     trace,
-  });
+  }) as StateCreator<T, [], []>;
 };
