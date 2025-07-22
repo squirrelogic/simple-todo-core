@@ -17,7 +17,23 @@ export const todoStorage = {
         todos,
         filter,
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const serialized = JSON.stringify(data);
+      
+      try {
+        localStorage.setItem(STORAGE_KEY, serialized);
+      } catch (storageError) {
+        // Handle quota exceeded error
+        if (storageError instanceof DOMException && 
+            (storageError.code === 22 || 
+             storageError.code === 1014 || 
+             storageError.name === 'QuotaExceededError' ||
+             storageError.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+          console.error('Storage quota exceeded. Unable to save todos.');
+          // Could emit an event or callback here to notify the UI
+        } else {
+          throw storageError;
+        }
+      }
     } catch (error) {
       console.error('Failed to save todos to localStorage:', error);
     }

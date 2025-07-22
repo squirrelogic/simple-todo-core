@@ -28,7 +28,14 @@ interface TodoActions {
 type TodoStore = TodoState & TodoActions;
 
 export const useTodoStore = create<TodoStore>()(
-  immer((set, get) => ({
+  immer((set, get) => {
+    // Helper to persist state after mutations
+    const persistState = () => {
+      const { todos, filter } = get();
+      todoStorage.save(todos, filter);
+    };
+
+    return {
     // Initial state
     todos: [],
     filter: 'all',
@@ -63,8 +70,7 @@ export const useTodoStore = create<TodoStore>()(
       });
 
       // Save to storage
-      const { todos, filter } = get();
-      todoStorage.save(todos, filter);
+      persistState();
     },
 
     updateTodo: (id: string, text: string) => {
@@ -89,8 +95,7 @@ export const useTodoStore = create<TodoStore>()(
       });
 
       // Save to storage
-      const { todos, filter } = get();
-      todoStorage.save(todos, filter);
+      persistState();
     },
 
     toggleTodo: (id: string) => {
@@ -103,8 +108,7 @@ export const useTodoStore = create<TodoStore>()(
       });
 
       // Save to storage
-      const { todos, filter } = get();
-      todoStorage.save(todos, filter);
+      persistState();
     },
 
     deleteTodo: (id: string) => {
@@ -113,8 +117,7 @@ export const useTodoStore = create<TodoStore>()(
       });
 
       // Save to storage
-      const { todos, filter } = get();
-      todoStorage.save(todos, filter);
+      persistState();
     },
 
     clearCompleted: () => {
@@ -123,8 +126,7 @@ export const useTodoStore = create<TodoStore>()(
       });
 
       // Save to storage
-      const { todos, filter } = get();
-      todoStorage.save(todos, filter);
+      persistState();
     },
 
     toggleAll: () => {
@@ -139,8 +141,7 @@ export const useTodoStore = create<TodoStore>()(
       });
 
       // Save to storage
-      const { todos, filter } = get();
-      todoStorage.save(todos, filter);
+      persistState();
     },
 
     setFilter: (filter: FilterType) => {
@@ -149,8 +150,7 @@ export const useTodoStore = create<TodoStore>()(
       });
 
       // Save to storage
-      const { todos } = get();
-      todoStorage.save(todos, filter);
+      persistState();
     },
 
     loadTodos: () => {
@@ -192,5 +192,6 @@ export const useTodoStore = create<TodoStore>()(
         completed: todos.filter(todo => todo.completed).length,
       };
     },
-  }))
+    };
+  })
 );

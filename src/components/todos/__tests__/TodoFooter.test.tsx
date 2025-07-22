@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TodoFooter } from '../TodoFooter';
 import { useTodoStore } from '@/stores/todos/todo-store';
@@ -155,7 +155,9 @@ describe('TodoFooter', () => {
       expect(screen.getByText('Confirm clear?')).toBeInTheDocument();
 
       // Fast-forward 3 seconds
-      jest.advanceTimersByTime(3000);
+      await act(async () => {
+        jest.advanceTimersByTime(3000);
+      });
 
       await waitFor(() => {
         expect(screen.queryByText('Confirm clear?')).not.toBeInTheDocument();

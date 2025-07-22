@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTodoStore } from '@/stores/todos/todo-store';
 import { TodoItem } from './TodoItem';
 
 export function TodoList() {
-  const todos = useTodoStore((state) => state.getFilteredTodos()) || [];
+  const getFilteredTodos = useTodoStore((state) => state.getFilteredTodos);
+  const todos = useMemo(() => getFilteredTodos() || [], [getFilteredTodos]);
   const filter = useTodoStore((state) => state.filter);
   const isLoading = useTodoStore((state) => state.isLoading);
   const loadTodos = useTodoStore((state) => state.loadTodos);

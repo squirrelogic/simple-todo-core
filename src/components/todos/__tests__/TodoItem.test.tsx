@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TodoItem } from '../TodoItem';
 import { TodoItem as TodoItemType } from '@/types/todo';
@@ -203,7 +203,9 @@ describe('TodoItem', () => {
     expect(screen.getByLabelText('Confirm delete "Test todo item"')).toBeInTheDocument();
     
     // Fast-forward 3 seconds
-    jest.advanceTimersByTime(3000);
+    await act(async () => {
+      jest.advanceTimersByTime(3000);
+    });
     
     await waitFor(() => {
       expect(screen.getByLabelText('Delete "Test todo item"')).toBeInTheDocument();

@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 
+// Constants
+const DEFAULT_CONFIRMATION_TIMEOUT = 3000;
+
 interface UseConfirmationOptions {
   timeout?: number;
   onConfirm?: () => void;
@@ -7,7 +10,7 @@ interface UseConfirmationOptions {
 }
 
 export function useConfirmation(options: UseConfirmationOptions = {}) {
-  const { timeout = 3000, onConfirm, onCancel } = options;
+  const { timeout = DEFAULT_CONFIRMATION_TIMEOUT, onConfirm, onCancel } = options;
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   // Auto-cancel confirmation after timeout
