@@ -5,6 +5,7 @@ This document describes the high-level architecture of the Simple Todo applicati
 ## Technology Stack
 
 - **Frontend Framework**: Next.js 14 (React 18)
+- **State Management**: Zustand 4.x
 - **Styling**: Tailwind CSS
 - **Language**: TypeScript
 - **Testing**: Jest + React Testing Library
@@ -16,10 +17,18 @@ This document describes the high-level architecture of the Simple Todo applicati
 simple-todo/
 ├── src/
 │   ├── app/              # Next.js App Router pages
-│   ├── components/       # Reusable React components
-│   ├── lib/              # Utility functions and business logic
-│   ├── styles/           # Global styles and Tailwind config
-│   └── types/            # TypeScript type definitions
+│   ├── features/         # Feature-based modules
+│   │   └── todos/        # Todo feature
+│   │       ├── components/   # UI components
+│   │       ├── stores/       # Zustand stores
+│   │       ├── hooks/        # Custom hooks
+│   │       ├── effects/      # Side effects
+│   │       ├── types/        # TypeScript types
+│   │       └── utils/        # Helper functions
+│   ├── shared/           # Shared resources
+│   │   ├── components/   # Shared UI components
+│   │   └── utils/        # Shared utilities
+│   └── styles/           # Global styles
 ├── tests/                # Test files
 ├── public/               # Static assets
 └── docs/                 # Documentation
@@ -35,13 +44,16 @@ We use Next.js 14's App Router for:
 - API routes for backend functionality
 
 ### 2. Component Architecture
-- **Atomic Design**: Components organized by complexity (atoms, molecules, organisms)
+- **Feature-First Organization**: Components grouped by feature, not by type
+- **Clear Separation of Concerns**: UI (components), State (stores), Side Effects (effects)
 - **Composition over Inheritance**: Prefer component composition
 - **Single Responsibility**: Each component has one clear purpose
 
 ### 3. State Management
-- **Local State**: React hooks for component state
-- **Global State**: Context API for app-wide state (future: consider Zustand/Redux if needed)
+- **Local State**: React hooks for component-specific state
+- **Global State**: Zustand stores for feature state management
+- **Persistence**: Zustand persist middleware for localStorage sync
+- **Effects Layer**: Separate layer for side effects and external interactions
 - **Server State**: React Query for data fetching and caching (when applicable)
 
 ### 4. Styling Strategy
@@ -52,7 +64,11 @@ We use Next.js 14's App Router for:
 ### 5. Data Flow
 
 ```
-User Action → Component → Action/Hook → API/State → Update UI
+User Action → Component → Zustand Action → State Update → Re-render
+                               ↓
+                         Effects Layer
+                               ↓
+                    (localStorage, API, etc.)
 ```
 
 ### 6. Testing Strategy
@@ -89,6 +105,8 @@ User Action → Component → Action/Hook → API/State → Update UI
 3. **Real-time Updates**: WebSockets for collaborative features
 4. **Monitoring**: Application performance monitoring
 5. **CI/CD**: Automated testing and deployment pipeline
+6. **Advanced State Features**: Zustand devtools, time-travel debugging
+7. **Optimistic Updates**: Leveraging Zustand's transient updates
 
 ## Development Principles
 
