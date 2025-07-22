@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { TodoItem, FilterType } from '@/types/todo';
 import { validateTodoText, sanitizeTodoText } from '@/lib/validation/todo';
 import { todoStorage } from '@/lib/storage/todo-storage';
+import { applyFilter, getTodoStats } from '@/lib/utils/todo-filters';
 
 interface TodoState {
   todos: TodoItem[];
@@ -171,26 +172,12 @@ export const useTodoStore = create<TodoStore>()(
 
     getFilteredTodos: () => {
       const { todos, filter } = get();
-      
-      switch (filter) {
-        case 'active':
-          return todos.filter(todo => !todo.completed);
-        case 'completed':
-          return todos.filter(todo => todo.completed);
-        case 'all':
-        default:
-          return todos;
-      }
+      return applyFilter(todos, filter);
     },
 
     getStats: () => {
       const { todos } = get();
-      
-      return {
-        total: todos.length,
-        active: todos.filter(todo => !todo.completed).length,
-        completed: todos.filter(todo => todo.completed).length,
-      };
+      return getTodoStats(todos);
     },
     };
   })

@@ -4,6 +4,8 @@ import { useState, FormEvent, KeyboardEvent } from 'react';
 import { useTodoStore } from '@/stores/todos/todo-store';
 import { TODO_TEXT_MAX_LENGTH } from '@/lib/validation/todo';
 
+const CHARACTER_WARNING_THRESHOLD = 20;
+
 export function TodoInput() {
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export function TodoInput() {
 
   const displayError = error || storeError;
   const remainingChars = TODO_TEXT_MAX_LENGTH - inputValue.length;
-  const isNearLimit = remainingChars <= 20;
+  const isNearLimit = remainingChars <= CHARACTER_WARNING_THRESHOLD;
 
   return (
     <form onSubmit={handleSubmit} className="w-full">

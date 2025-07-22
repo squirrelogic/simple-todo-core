@@ -3,6 +3,14 @@ import { TodoItem, FilterType } from '@/types/todo';
 const STORAGE_KEY = 'simple-todo-app';
 const STORAGE_VERSION = 1;
 
+const isQuotaExceededError = (error: unknown): boolean => {
+  if (!(error instanceof DOMException)) return false;
+  
+  // Check by name as error.code is deprecated
+  return error.name === 'QuotaExceededError' ||
+         error.name === 'NS_ERROR_DOM_QUOTA_REACHED';
+};
+
 interface StorageData {
   version: number;
   todos: TodoItem[];
@@ -23,11 +31,7 @@ export const todoStorage = {
         localStorage.setItem(STORAGE_KEY, serialized);
       } catch (storageError) {
         // Handle quota exceeded error
-        if (storageError instanceof DOMException && 
-            (storageError.code === 22 || 
-             storageError.code === 1014 || 
-             storageError.name === 'QuotaExceededError' ||
-             storageError.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+        if (isQuotaExceededError(storageError)) {
           console.error('Storage quota exceeded. Unable to save todos.');
           // Could emit an event or callback here to notify the UI
         } else {
