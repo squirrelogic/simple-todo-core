@@ -8,7 +8,6 @@ export class AppError extends Error {
 
   constructor(message: string, code: string, context?: Record<string, unknown>) {
     super(message);
-    this.name = this.constructor.name;
     this.code = code;
     this.timestamp = new Date();
     this.context = context;
@@ -17,6 +16,9 @@ export class AppError extends Error {
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
+    
+    // Set name explicitly after super() to ensure it's correct
+    this.name = this.constructor.name;
   }
 }
 

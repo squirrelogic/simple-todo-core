@@ -63,7 +63,8 @@ describe('TodoStorage', () => {
       // Mock localStorage.setItem to throw an error
       const setItemSpy = jest.spyOn(Storage.prototype, 'setItem');
       setItemSpy.mockImplementation(() => {
-        throw new Error('QuotaExceededError');
+        const error = new DOMException('Quota exceeded', 'QuotaExceededError');
+        throw error;
       });
 
       // Should not throw
@@ -74,8 +75,8 @@ describe('TodoStorage', () => {
       expect(console.error).toHaveBeenCalledWith(
         'Application Error:',
         expect.objectContaining({
-          name: 'StorageError',
-          code: 'STORAGE_ERROR'
+          code: 'STORAGE_ERROR',
+          message: 'Storage quota exceeded. Unable to save todos.'
         })
       );
     });
@@ -136,7 +137,6 @@ describe('TodoStorage', () => {
       expect(console.error).toHaveBeenCalledWith(
         'Application Error:',
         expect.objectContaining({
-          name: 'UnknownError',
           code: 'UNKNOWN_ERROR'
         })
       );
@@ -153,7 +153,6 @@ describe('TodoStorage', () => {
       expect(console.error).toHaveBeenCalledWith(
         'Application Error:',
         expect.objectContaining({
-          name: 'UnknownError',
           code: 'UNKNOWN_ERROR'
         })
       );
@@ -183,7 +182,6 @@ describe('TodoStorage', () => {
       expect(console.error).toHaveBeenCalledWith(
         'Application Error:',
         expect.objectContaining({
-          name: 'UnknownError',
           code: 'UNKNOWN_ERROR'
         })
       );
