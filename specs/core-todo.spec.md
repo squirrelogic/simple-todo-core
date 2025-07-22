@@ -311,80 +311,154 @@ type FilterType = 'all' | 'active' | 'completed';
 
 ### 7.1 Architecture
 
-#### Component Structure
+#### Feature-First Structure
 ```
 src/
 ├── app/
 │   └── page.tsx                 # Main todo page
-├── components/
-│   ├── atoms/
-│   │   ├── Checkbox.tsx        # Reusable checkbox
-│   │   ├── Input.tsx           # Text input component
-│   │   ├── Button.tsx          # Action buttons
-│   │   └── IconButton.tsx      # Icon-based buttons
-│   ├── molecules/
-│   │   ├── TodoItem.tsx        # Individual todo component
-│   │   ├── TodoInput.tsx       # Create todo input
-│   │   ├── TodoFilter.tsx      # Filter buttons
-│   │   └── TodoCounter.tsx     # Active count display
-│   └── organisms/
-│       ├── TodoList.tsx        # Todo list container
-│       ├── TodoHeader.tsx      # App header with input
-│       └── TodoFooter.tsx      # Filters and actions
-├── hooks/
-│   ├── useTodos.ts             # Todo state management
-│   ├── useLocalStorage.ts      # localStorage hook
-│   └── useKeyboard.ts          # Keyboard shortcuts
-├── lib/
-│   ├── todoService.ts          # Business logic
-│   ├── storage.ts              # Storage abstraction
-│   └── validation.ts           # Input validation
-└── types/
-    └── todo.ts                 # TypeScript definitions
+├── features/
+│   └── todos/
+│       ├── components/          # UI components
+│       │   ├── TodoApp.tsx      # Main app container
+│       │   ├── TodoHeader.tsx   # Header with input
+│       │   ├── TodoList.tsx     # List container
+│       │   ├── TodoItem.tsx     # Individual todo
+│       │   ├── TodoInput.tsx    # Create todo input
+│       │   ├── TodoFilter.tsx   # Filter buttons
+│       │   ├── TodoFooter.tsx   # Footer with actions
+│       │   └── TodoCounter.tsx  # Active count display
+│       ├── stores/              # Zustand stores
+│       │   └── todoStore.ts     # Todo state management
+│       ├── hooks/               # Custom hooks
+│       │   ├── useTodoStore.ts  # Store hook wrapper
+│       │   └── useKeyboard.ts   # Keyboard shortcuts
+│       ├── effects/             # Side effects
+│       │   ├── persistence.ts   # LocalStorage sync
+│       │   └── migrations.ts    # Data migrations
+│       ├── types/               # TypeScript types
+│       │   └── todo.ts          # Todo interfaces
+│       └── utils/               # Helper functions
+│           ├── validation.ts    # Input validation
+│           └── helpers.ts       # Utility functions
+├── shared/
+│   ├── components/              # Shared UI components
+│   │   ├── Button.tsx          # Reusable button
+│   │   ├── Input.tsx           # Text input
+│   │   ├── Checkbox.tsx        # Checkbox component
+│   │   └── IconButton.tsx      # Icon button
+│   └── utils/                   # Shared utilities
+│       └── constants.ts         # App constants
 ```
 
 ### 7.2 State Management
 
-#### Local State Architecture
+#### Zustand Store Architecture
 ```typescript
-// Todo State Management
+// Todo Store using Zustand
+import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+
 interface TodoState {
+  // State
   todos: Todo[];
   filter: FilterType;
   isLoading: boolean;
   error: string | null;
+  
+  // Actions
+  addTodo: (text: string) => void;
+  updateTodo: (id: string, text: string) => void;
+  toggleTodo: (id: string) => void;
+  deleteTodo: (id: string) => void;
+  setFilter: (filter: FilterType) => void;
+  clearCompleted: () => void;
+  toggleAll: () => void;
+  loadTodos: (todos: Todo[]) => void;
+  setError: (error: string | null) => void;
+  setLoading: (isLoading: boolean) => void;
+  
+  // Computed values
+  activeTodos: () => Todo[];
+  completedTodos: () => Todo[];
+  filteredTodos: () => Todo[];
 }
 
-type TodoAction =
-  | { type: 'ADD_TODO'; payload: { text: string } }
-  | { type: 'UPDATE_TODO'; payload: { id: string; text: string } }
-  | { type: 'TOGGLE_TODO'; payload: { id: string } }
-  | { type: 'DELETE_TODO'; payload: { id: string } }
-  | { type: 'SET_FILTER'; payload: { filter: FilterType } }
-  | { type: 'CLEAR_COMPLETED' }
-  | { type: 'TOGGLE_ALL' }
-  | { type: 'LOAD_TODOS'; payload: { todos: Todo[] } }
-  | { type: 'SET_ERROR'; payload: { error: string } };
+// Store implementation example
+const useTodoStore = create<TodoState>()(
+  devtools(
+    persist(
+      (set, get) => ({
+        // Initial state
+        todos: [],
+        filter: 'all',
+        isLoading: false,
+        error: null,
+        
+        // Actions implementation
+        addTodo: (text) => {
+          const newTodo: Todo = {
+            id: crypto.randomUUID(),
+            text: text.trim(),
+            completed: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          set((state) => ({ todos: [newTodo, ...state.todos] }));
+        },
+        
+        // ... other actions
+        
+        // Computed values
+        activeTodos: () => get().todos.filter(todo => !todo.completed),
+        completedTodos: () => get().todos.filter(todo => todo.completed),
+        filteredTodos: () => {
+          const { todos, filter } = get();
+          switch (filter) {
+            case 'active': return get().activeTodos();
+            case 'completed': return get().completedTodos();
+            default: return todos;
+          }
+        },
+      }),
+      {
+        name: 'todo-storage',
+      }
+    )
+  )
+);
 ```
 
-### 7.3 API Design (Internal)
+### 7.3 Effects Layer Design
 
-#### Service Layer Interface
+#### Persistence Effects
 ```typescript
-interface TodoService {
-  // CRUD Operations
-  createTodo(text: string): Promise<Todo>;
-  updateTodo(id: string, updates: Partial<Todo>): Promise<Todo>;
-  deleteTodo(id: string): Promise<void>;
-  getTodos(): Promise<Todo[]>;
+// LocalStorage persistence effect
+import { TodoState } from '../stores/todoStore';
+
+interface PersistenceEffect {
+  // Save state to localStorage
+  save(state: Partial<TodoState>): Promise<void>;
   
-  // Bulk Operations
-  clearCompleted(): Promise<void>;
-  toggleAll(completed: boolean): Promise<void>;
+  // Load state from localStorage
+  load(): Promise<Partial<TodoState> | null>;
   
-  // Persistence
-  saveTodos(todos: Todo[]): Promise<void>;
-  loadTodos(): Promise<Todo[]>;
+  // Clear stored data
+  clear(): Promise<void>;
+  
+  // Get storage usage
+  getUsage(): Promise<{ used: number; quota: number }>;
+  
+  // Subscribe to store changes
+  subscribe(store: any): () => void;
+}
+
+// Migration effect for data schema changes
+interface MigrationEffect {
+  // Run migrations on stored data
+  migrate(data: any): Promise<TodoState>;
+  
+  // Check if migration needed
+  needsMigration(data: any): boolean;
 }
 ```
 
@@ -399,10 +473,13 @@ interface TodoService {
 #### Test Structure
 ```
 tests/
-├── unit/
-│   ├── components/          # Component tests
-│   ├── hooks/              # Hook tests
-│   └── lib/                # Utility tests
+├── features/
+│   └── todos/
+│       ├── components/      # Component tests
+│       ├── stores/          # Zustand store tests
+│       ├── hooks/           # Hook tests
+│       ├── effects/         # Effects tests
+│       └── utils/           # Utility tests
 ├── integration/
 │   ├── todoFlow.test.ts    # Complete user flows
 │   └── persistence.test.ts # Storage integration
@@ -674,6 +751,8 @@ const edgeCases = [
 - React Testing Library
 - ESLint for linting
 - Prettier for formatting
+- Zustand 4.x for state management
+- zustand/middleware for devtools and persistence
 
 ### 11.2 External Dependencies
 - None for v1.0 (fully self-contained)

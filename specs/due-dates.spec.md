@@ -374,27 +374,18 @@ function calculateNextOccurrence(
 
 #### FR-DD-013: Extended Todo Model
 ```typescript
-interface Todo {
-  // Existing fields
-  id: string;
-  text: string;
-  completed: boolean;
-  createdAt: string;
-  updatedAt: string;
-  userId?: string; // From auth feature
-  
-  // New due date fields
+// Located in: src/features/due-dates/types/dueDate.types.ts
+
+import { Todo } from '@/features/core-todo/types';
+
+export interface DueDateTodo extends Todo {
+  // Due date fields
   dueDate?: string;        // ISO date string
   dueTime?: string;        // HH:MM format
   timezone?: string;       // IANA timezone ID
   
   // Reminder settings
-  reminder?: {
-    enabled: boolean;
-    minutesBefore: number;
-    lastNotified?: string;
-    snoozedUntil?: string;
-  };
+  reminder?: ReminderSettings;
   
   // Recurrence settings
   recurrence?: RecurrenceRule;
@@ -404,6 +395,23 @@ interface Todo {
   // Metadata
   originalDueDate?: string; // For rescheduled items
   completedDate?: string;   // When marked complete
+}
+
+export interface ReminderSettings {
+  enabled: boolean;
+  minutesBefore: number;
+  lastNotified?: string;
+  snoozedUntil?: string;
+}
+
+export interface RecurrenceRule {
+  pattern: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+  interval: number;
+  weekDays?: number[]; // 0-6 for weekly
+  monthDay?: number; // 1-31 for monthly
+  endDate?: string;
+  occurrences?: number;
+  skipWeekends?: boolean;
 }
 ```
 
@@ -502,33 +510,43 @@ interface Todo {
 
 ### 7.1 Architecture Design
 
-#### Component Architecture
+#### Feature-First Architecture
 ```
-src/components/
-├── atoms/
+src/features/due-dates/
+├── components/
 │   ├── DateBadge.tsx          // Date display pill
 │   ├── DateInput.tsx          // Text input with validation
-│   ├── TimeInput.tsx          // Time selection
-│   └── RecurrenceIcon.tsx     // Visual indicator
-├── molecules/
 │   ├── DatePicker.tsx         // Calendar picker
-│   ├── QuickDateSelect.tsx    // Preset options
 │   ├── DateRangeFilter.tsx    // Filter controls
+│   ├── DueDateManager.tsx     // Complete date UI
+│   ├── QuickDateSelect.tsx    // Preset options
 │   ├── RecurrenceForm.tsx     // Recurrence settings
-│   └── ReminderSettings.tsx   // Notification config
-└── organisms/
-    ├── DueDateManager.tsx     // Complete date UI
-    ├── TodoListSorted.tsx     // Date-aware list
-    └── NotificationCenter.tsx // Reminder management
-```
-
-#### Service Architecture
-```
-src/services/
-├── dateService.ts       // Date calculations
-├── notificationService.ts // Browser notifications
-├── recurrenceService.ts // Recurring task logic
-└── reminderService.ts   // Reminder scheduling
+│   ├── RecurrenceIcon.tsx     // Visual indicator
+│   ├── ReminderSettings.tsx   // Notification config
+│   ├── TimeInput.tsx          // Time selection
+│   └── TodoListSorted.tsx     // Date-aware list
+├── stores/
+│   ├── dueDateStore.ts        // Main due date state
+│   ├── reminderStore.ts       // Reminder preferences
+│   └── recurrenceStore.ts     // Recurring task state
+├── hooks/
+│   ├── useDueDates.ts         // Due date operations
+│   ├── useReminders.ts        // Reminder management
+│   ├── useRecurrence.ts       // Recurrence logic
+│   └── useDateFilters.ts      // Date filtering
+├── effects/
+│   ├── reminderEffect.ts      // Notification scheduling
+│   ├── recurrenceEffect.ts    // Recurring task generation
+│   └── syncEffect.ts          // Date sync operations
+├── types/
+│   ├── dueDate.types.ts       // Due date interfaces
+│   ├── reminder.types.ts      // Reminder interfaces
+│   └── recurrence.types.ts    // Recurrence interfaces
+└── utils/
+    ├── dateCalculations.ts    // Date arithmetic
+    ├── dateFormatting.ts      // Display formatting
+    ├── dateValidation.ts      // Input validation
+    └── naturalLanguage.ts     // Text parsing
 ```
 
 ### 7.2 Technology Stack
@@ -565,109 +583,244 @@ src/services/
 - Lightweight and focused
 - Good accuracy for common phrases
 
-### 7.3 Data Storage
+### 7.3 Data Storage with Zustand
 
-#### LocalStorage Schema Update
+#### Store Persistence
 ```typescript
-interface StoredData {
-  version: '2.0.0'; // Increment for migration
-  todos: Todo[];
-  preferences: {
-    dateFormat?: string;
-    firstDayOfWeek?: number;
-    defaultReminderTime?: number;
-    timezone?: string;
-  };
-  notificationQueue: QueuedNotification[];
+// Due dates feature integrates with core todo store
+// Located in: src/features/core-todo/stores/todoStore.ts
+
+import { TodoStore } from '@/features/core-todo/types';
+import { DueDateTodo } from '@/features/due-dates/types';
+
+// The core todo store is extended to support due dates
+// Each feature adds its own stores for feature-specific state
+
+// Example: Due date preferences store
+// Located in: src/features/due-dates/stores/preferencesStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+interface DueDatePreferencesStore {
+  dateFormat: 'US' | 'EU' | 'ISO';
+  firstDayOfWeek: 0 | 1 | 6;
+  defaultReminderTime: number;
+  timezone: string;
+  
+  updatePreferences: (prefs: Partial<DueDatePreferencesStore>) => void;
+  resetToDefaults: () => void;
 }
+
+export const useDueDatePreferences = create<DueDatePreferencesStore>(
+  persist(
+    (set) => ({
+      dateFormat: 'US',
+      firstDayOfWeek: 0,
+      defaultReminderTime: 60,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      
+      updatePreferences: (prefs) => set((state) => ({ ...state, ...prefs })),
+      resetToDefaults: () => set({
+        dateFormat: 'US',
+        firstDayOfWeek: 0,
+        defaultReminderTime: 60,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    }),
+    {
+      name: 'due-date-preferences',
+    }
+  )
+);
 ```
 
-#### Migration Strategy
+### 7.4 Zustand Stores
+
+#### Due Date Store
 ```typescript
-function migrateToV2(oldData: any): StoredData {
-  return {
-    version: '2.0.0',
-    todos: oldData.todos.map(todo => ({
-      ...todo,
-      dueDate: todo.dueDate || undefined,
-      reminder: undefined,
-      recurrence: undefined
-    })),
-    preferences: {
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import { Todo, DueDateFilter, SortOption } from '../types';
+
+interface DueDateStore {
+  // State
+  dateFilters: DueDateFilter[];
+  sortOption: SortOption | null;
+  
+  // Actions
+  setDueDate: (todoId: string, date: Date | null) => void;
+  setDueTime: (todoId: string, time: string | null) => void;
+  
+  // Batch operations
+  bulkSetDueDate: (todoIds: string[], date: Date | null) => void;
+  postponeTodos: (todoIds: string[], days: number) => void;
+  
+  // Filtering and sorting
+  setDateFilter: (filter: DueDateFilter) => void;
+  clearDateFilters: () => void;
+  setSortOption: (option: SortOption) => void;
+  
+  // Computed values
+  getFilteredTodos: (todos: Todo[]) => Todo[];
+  getSortedTodos: (todos: Todo[]) => Todo[];
+}
+
+export const useDueDateStore = create<DueDateStore>(
+  subscribeWithSelector((set, get) => ({
+    dateFilters: [],
+    sortOption: null,
+    
+    setDueDate: (todoId, date) => {
+      // Update todo in core store
     },
-    notificationQueue: []
+    
+    // ... other implementations
+  }))
+);
+```
+
+#### Reminder Store
+```typescript
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { Todo, ReminderSettings, NotificationEvent } from '../types';
+
+interface ReminderStore {
+  // State
+  globalSettings: ReminderSettings;
+  todoReminders: Record<string, ReminderSettings>;
+  notificationHistory: NotificationEvent[];
+  permission: NotificationPermission;
+  
+  // Actions
+  requestPermission: () => Promise<NotificationPermission>;
+  
+  // Reminder management
+  setTodoReminder: (todoId: string, settings: ReminderSettings) => void;
+  removeTodoReminder: (todoId: string) => void;
+  updateGlobalSettings: (settings: Partial<ReminderSettings>) => void;
+  
+  // Notification operations
+  scheduleReminder: (todo: Todo) => void;
+  cancelReminder: (todoId: string) => void;
+  snoozeReminder: (todoId: string, minutes: number) => void;
+  
+  // History
+  addNotificationEvent: (event: NotificationEvent) => void;
+  clearHistory: () => void;
+}
+
+export const useReminderStore = create<ReminderStore>(
+  persist(
+    (set, get) => ({
+      globalSettings: {
+        enabled: true,
+        defaultMinutesBefore: 60,
+      },
+      todoReminders: {},
+      notificationHistory: [],
+      permission: 'default',
+      
+      // ... implementations
+    }),
+    {
+      name: 'reminder-settings',
+    }
+  )
+);
+```
+
+### 7.5 Custom Hooks
+
+#### useDueDates Hook
+```typescript
+// Located in: src/features/due-dates/hooks/useDueDates.ts
+
+import { useTodoStore } from '@/features/core-todo/stores/todoStore';
+import { useDueDateStore } from '../stores/dueDateStore';
+import { DueDateTodo } from '../types';
+
+export const useDueDates = () => {
+  const todos = useTodoStore((state) => state.todos);
+  const { setDueDate, setDueTime, bulkSetDueDate, postponeTodos } = useDueDateStore();
+  
+  const todosWithDueDates = todos.filter((todo): todo is DueDateTodo => 
+    'dueDate' in todo && todo.dueDate !== undefined
+  );
+  
+  const overdueTodos = todosWithDueDates.filter(todo => 
+    todo.dueDate && new Date(todo.dueDate) < new Date()
+  );
+  
+  const todayTodos = todosWithDueDates.filter(todo => 
+    todo.dueDate && isToday(new Date(todo.dueDate))
+  );
+  
+  return {
+    todosWithDueDates,
+    overdueTodos,
+    todayTodos,
+    setDueDate,
+    setDueTime,
+    bulkSetDueDate,
+    postponeTodos,
   };
-}
+};
 ```
 
-### 7.4 API Design (Internal)
-
-#### Date Service Interface
+#### useReminders Hook
 ```typescript
-interface DateService {
-  // Parsing
-  parseNaturalDate(input: string): Date | null;
-  parseFormattedDate(input: string, format?: string): Date | null;
+// Located in: src/features/due-dates/hooks/useReminders.ts
+
+import { useEffect } from 'react';
+import { useReminderStore } from '../stores/reminderStore';
+import { useTodoStore } from '@/features/core-todo/stores/todoStore';
+
+export const useReminders = () => {
+  const { permission, requestPermission, scheduleReminder } = useReminderStore();
+  const todos = useTodoStore((state) => state.todos);
   
-  // Formatting
-  formatRelativeDate(date: Date): string;
-  formatAbsoluteDate(date: Date, format?: string): string;
-  formatTimeAgo(date: Date): string;
+  // Check and schedule reminders for todos with due dates
+  useEffect(() => {
+    if (permission === 'granted') {
+      todos.forEach(todo => {
+        if (todo.dueDate && todo.reminder?.enabled) {
+          scheduleReminder(todo);
+        }
+      });
+    }
+  }, [todos, permission, scheduleReminder]);
   
-  // Calculations
-  getDaysUntil(date: Date): number;
-  isOverdue(date: Date): boolean;
-  getUrgencyLevel(date: Date): 'overdue' | 'today' | 'soon' | 'later';
-  
-  // Timezone
-  convertToLocalTime(utcDate: string): Date;
-  convertToUTC(localDate: Date): string;
-}
+  return {
+    permission,
+    requestPermission,
+  };
+};
 ```
 
-#### Notification Service Interface
-```typescript
-interface NotificationService {
-  // Permissions
-  checkPermission(): NotificationPermission;
-  requestPermission(): Promise<NotificationPermission>;
-  
-  // Scheduling
-  scheduleReminder(todo: Todo): void;
-  cancelReminder(todoId: string): void;
-  snoozeReminder(todoId: string, minutes: number): void;
-  
-  // Delivery
-  showNotification(todo: Todo): void;
-  checkPendingNotifications(): void;
-  
-  // Preferences
-  setGlobalPreferences(prefs: NotificationPreferences): void;
-  getNotificationHistory(): NotificationEvent[];
-}
-```
-
-### 7.5 Testing Strategy
+### 7.6 Testing Strategy
 
 #### Test Categories
 ```
-tests/
-├── unit/
-│   ├── dateService.test.ts
-│   ├── recurrenceEngine.test.ts
+src/features/due-dates/__tests__/
+├── components/
+│   ├── DatePicker.test.tsx
+│   ├── DueDateManager.test.tsx
+│   └── RecurrenceForm.test.tsx
+├── stores/
+│   ├── dueDateStore.test.ts
+│   ├── reminderStore.test.ts
+│   └── recurrenceStore.test.ts
+├── hooks/
+│   ├── useDueDates.test.ts
+│   └── useReminders.test.ts
+├── utils/
+│   ├── dateCalculations.test.ts
 │   ├── dateFormatting.test.ts
 │   └── naturalLanguage.test.ts
-├── integration/
-│   ├── datePicker.test.tsx
-│   ├── notifications.test.ts
-│   └── sorting.test.tsx
-├── e2e/
-│   ├── setDueDate.spec.ts
-│   ├── recurringTasks.spec.ts
-│   └── reminders.spec.ts
-└── performance/
-    └── largeDateList.test.ts
+└── integration/
+    ├── dueDateFlow.test.tsx
+    └── reminderFlow.test.tsx
 ```
 
 #### Critical Test Scenarios

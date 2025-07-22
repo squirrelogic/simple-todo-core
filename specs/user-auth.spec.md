@@ -471,44 +471,57 @@ interface UserProfile {
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
-#### Component Structure
+#### Feature-First Architecture
 ```
 src/
 ├── app/
-│   ├── auth/
-│   │   ├── signin/page.tsx      # Sign in page
-│   │   ├── signup/page.tsx      # Sign up page
-│   │   ├── reset/page.tsx       # Password reset
-│   │   ├── verify/page.tsx      # Email verification
-│   │   └── error/page.tsx       # Auth errors
+│   ├── auth/                    # Auth pages remain in app router
+│   │   ├── signin/page.tsx
+│   │   ├── signup/page.tsx
+│   │   ├── reset/page.tsx
+│   │   ├── verify/page.tsx
+│   │   └── error/page.tsx
 │   ├── profile/
-│   │   ├── page.tsx             # User profile
-│   │   └── settings/page.tsx    # Account settings
+│   │   ├── page.tsx
+│   │   └── settings/page.tsx
 │   └── api/
 │       └── auth/
 │           └── [...nextauth]/route.ts
-├── components/
-│   ├── auth/
-│   │   ├── LoginForm.tsx        # Email/password form
-│   │   ├── SignupForm.tsx       # Registration form
-│   │   ├── OAuthButtons.tsx     # Social login buttons
-│   │   ├── PasswordStrength.tsx # Password indicator
-│   │   └── TwoFactorSetup.tsx   # 2FA configuration
-│   └── profile/
-│       ├── ProfileForm.tsx      # Profile editor
-│       ├── SessionList.tsx      # Active sessions
-│       └── SecuritySettings.tsx # Security options
-├── lib/
-│   ├── auth/
-│   │   ├── nextauth.ts          # NextAuth config
-│   │   ├── session.ts           # Session utilities
-│   │   ├── validation.ts        # Input validation
-│   │   └── migration.ts         # Todo migration
-│   └── db/
-│       ├── schema.ts            # Database schema
-│       └── queries.ts           # Database queries
-└── types/
-    └── auth.ts                  # TypeScript types
+└── features/
+    └── user-auth/
+        ├── components/
+        │   ├── LoginForm.tsx        # Email/password form
+        │   ├── SignupForm.tsx       # Registration form
+        │   ├── OAuthButtons.tsx     # Social login buttons
+        │   ├── PasswordStrength.tsx # Password indicator
+        │   ├── ProfileForm.tsx      # Profile editor
+        │   ├── SecuritySettings.tsx # Security options
+        │   ├── SessionList.tsx      # Active sessions
+        │   └── TwoFactorSetup.tsx   # 2FA configuration
+        ├── stores/
+        │   ├── authStore.ts         # Main auth state
+        │   ├── sessionStore.ts      # Session management
+        │   ├── profileStore.ts      # User profile state
+        │   └── migrationStore.ts    # Todo migration state
+        ├── hooks/
+        │   ├── useAuth.ts           # Auth operations
+        │   ├── useSession.ts        # Session management
+        │   ├── useProfile.ts        # Profile operations
+        │   └── useMigration.ts      # Todo migration
+        ├── effects/
+        │   ├── authEffect.ts        # Auth side effects
+        │   ├── sessionEffect.ts     # Session monitoring
+        │   └── migrationEffect.ts   # Migration process
+        ├── types/
+        │   ├── auth.types.ts        # Auth interfaces
+        │   ├── session.types.ts     # Session interfaces
+        │   └── profile.types.ts     # Profile interfaces
+        └── utils/
+            ├── auth/
+            │   ├── nextauth.ts      # NextAuth config
+            │   ├── validation.ts    # Input validation
+            │   └── jwt.ts           # JWT utilities
+            └── migration.ts         # Migration logic
 ```
 
 ### 7.2 Database Schema
@@ -693,7 +706,174 @@ export const authOptions = {
 }
 ```
 
-### 7.5 Testing Strategy
+### 7.5 Zustand Stores
+
+#### Auth Store
+```typescript
+// Located in: src/features/user-auth/stores/authStore.ts
+
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+
+interface AuthStore {
+  // State
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  
+  // Actions
+  setUser: (user: User | null) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  
+  // Auth operations
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, name?: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  
+  // OAuth
+  signInWithOAuth: (provider: 'google' | 'github') => Promise<void>;
+  
+  // Password management
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+}
+
+export const useAuthStore = create<AuthStore>(
+  subscribeWithSelector((set, get) => ({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+    error: null,
+    
+    setUser: (user) => set({ 
+      user, 
+      isAuthenticated: !!user,
+      error: null 
+    }),
+    
+    setLoading: (isLoading) => set({ isLoading }),
+    setError: (error) => set({ error }),
+    
+    signIn: async (email, password) => {
+      set({ isLoading: true, error: null });
+      try {
+        // NextAuth signIn logic
+        const result = await signIn('credentials', {
+          email,
+          password,
+          redirect: false,
+        });
+        
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+        
+        // User will be set by session provider
+      } catch (error) {
+        set({ error: error.message, isLoading: false });
+        throw error;
+      }
+    },
+    
+    // ... other implementations
+  }))
+);
+```
+
+#### Session Store
+```typescript
+// Located in: src/features/user-auth/stores/sessionStore.ts
+
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+interface SessionStore {
+  // State
+  sessions: Session[];
+  currentSessionId: string | null;
+  lastActivity: Date | null;
+  
+  // Actions
+  addSession: (session: Session) => void;
+  removeSession: (sessionId: string) => void;
+  updateActivity: () => void;
+  
+  // Session management
+  revokeSession: (sessionId: string) => Promise<void>;
+  revokeAllSessions: () => Promise<void>;
+  refreshCurrentSession: () => Promise<void>;
+}
+
+export const useSessionStore = create<SessionStore>(
+  persist(
+    (set, get) => ({
+      sessions: [],
+      currentSessionId: null,
+      lastActivity: null,
+      
+      addSession: (session) => set((state) => ({
+        sessions: [...state.sessions, session],
+        currentSessionId: session.id,
+      })),
+      
+      updateActivity: () => set({ lastActivity: new Date() }),
+      
+      // ... implementations
+    }),
+    {
+      name: 'auth-sessions',
+      partialize: (state) => ({ 
+        currentSessionId: state.currentSessionId,
+        lastActivity: state.lastActivity,
+      }),
+    }
+  )
+);
+```
+
+#### Profile Store
+```typescript
+// Located in: src/features/user-auth/stores/profileStore.ts
+
+import { create } from 'zustand';
+
+interface ProfileStore {
+  // State
+  profile: UserProfile | null;
+  preferences: UserPreferences;
+  isUpdating: boolean;
+  
+  // Actions
+  setProfile: (profile: UserProfile) => void;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
+  updatePreferences: (prefs: Partial<UserPreferences>) => void;
+  
+  // Account operations
+  deleteAccount: (password: string) => Promise<void>;
+  exportData: () => Promise<UserDataExport>;
+  
+  // 2FA
+  enable2FA: () => Promise<{ qrCode: string; secret: string }>;
+  verify2FA: (code: string) => Promise<void>;
+  disable2FA: (code: string) => Promise<void>;
+}
+
+export const useProfileStore = create<ProfileStore>((set, get) => ({
+  profile: null,
+  preferences: {
+    theme: 'system',
+    emailNotifications: true,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  },
+  isUpdating: false,
+  
+  // ... implementations
+}));
+```
+
+### 7.6 Testing Strategy
 
 #### Test Coverage Requirements
 - Unit tests: 90% coverage
@@ -704,26 +884,122 @@ export const authOptions = {
 
 #### Test Structure
 ```
-tests/
-├── unit/
-│   ├── auth/
-│   │   ├── validation.test.ts
-│   │   ├── session.test.ts
-│   │   └── jwt.test.ts
-│   └── lib/
-│       └── migration.test.ts
-├── integration/
-│   ├── auth-flow.test.ts
-│   ├── oauth.test.ts
-│   └── profile.test.ts
-├── e2e/
-│   ├── signup.spec.ts
-│   ├── signin.spec.ts
-│   └── password-reset.spec.ts
-└── security/
-    ├── injection.test.ts
-    ├── xss.test.ts
-    └── csrf.test.ts
+src/features/user-auth/__tests__/
+├── components/
+│   ├── LoginForm.test.tsx
+│   ├── SignupForm.test.tsx
+│   ├── OAuthButtons.test.tsx
+│   └── ProfileForm.test.tsx
+├── stores/
+│   ├── authStore.test.ts
+│   ├── sessionStore.test.ts
+│   └── profileStore.test.ts
+├── hooks/
+│   ├── useAuth.test.ts
+│   ├── useSession.test.ts
+│   └── useProfile.test.ts
+├── utils/
+│   ├── validation.test.ts
+│   ├── jwt.test.ts
+│   └── migration.test.ts
+└── integration/
+    ├── authFlow.test.tsx
+    ├── oauthFlow.test.tsx
+    └── profileFlow.test.tsx
+```
+
+### 7.7 Custom Hooks
+
+#### useAuth Hook
+```typescript
+// Located in: src/features/user-auth/hooks/useAuth.ts
+
+import { useAuthStore } from '../stores/authStore';
+import { useSession } from 'next-auth/react';
+import { useEffect } from 'react';
+
+export const useAuth = () => {
+  const { data: session, status } = useSession();
+  const { user, setUser, isAuthenticated, signIn, signOut } = useAuthStore();
+  
+  // Sync NextAuth session with Zustand store
+  useEffect(() => {
+    if (session?.user) {
+      setUser(session.user);
+    } else {
+      setUser(null);
+    }
+  }, [session, setUser]);
+  
+  return {
+    user: user || session?.user,
+    isAuthenticated: isAuthenticated || !!session,
+    isLoading: status === 'loading',
+    signIn,
+    signOut,
+  };
+};
+```
+
+#### useMigration Hook
+```typescript
+// Located in: src/features/user-auth/hooks/useMigration.ts
+
+import { useState, useEffect } from 'react';
+import { useTodoStore } from '@/features/core-todo/stores/todoStore';
+import { useAuthStore } from '../stores/authStore';
+
+export const useMigration = () => {
+  const [localTodos, setLocalTodos] = useState<Todo[]>([]);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const { user } = useAuthStore();
+  const { addTodo } = useTodoStore();
+  
+  // Check for local todos on mount
+  useEffect(() => {
+    if (user && !localStorage.getItem('todos-migrated')) {
+      const stored = localStorage.getItem('todos');
+      if (stored) {
+        try {
+          const todos = JSON.parse(stored);
+          setLocalTodos(todos);
+        } catch (error) {
+          console.error('Failed to parse local todos:', error);
+        }
+      }
+    }
+  }, [user]);
+  
+  const migrateTodos = async () => {
+    setIsMigrating(true);
+    try {
+      // Add user ID to each todo and save
+      for (const todo of localTodos) {
+        await addTodo({
+          ...todo,
+          userId: user.id,
+        });
+      }
+      
+      // Mark as migrated
+      localStorage.setItem('todos-migrated', 'true');
+      localStorage.removeItem('todos');
+      setLocalTodos([]);
+    } catch (error) {
+      console.error('Migration failed:', error);
+      throw error;
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+  
+  return {
+    localTodos,
+    hasTodosToMigrate: localTodos.length > 0,
+    isMigrating,
+    migrateTodos,
+  };
+};
 ```
 
 ## 8. Data Requirements

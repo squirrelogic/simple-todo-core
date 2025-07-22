@@ -627,45 +627,52 @@ interface WebhookConfig {
 └───────────────┘           └───────────────┘           └───────────────┘
 ```
 
-#### Component Structure
+#### Feature-First Architecture
 ```
-src/
+src/features/notifications/
 ├── components/
-│   ├── notifications/
-│   │   ├── NotificationCenter.tsx
-│   │   ├── NotificationItem.tsx
-│   │   ├── NotificationBadge.tsx
-│   │   ├── PreferenceCenter.tsx
-│   │   └── QuietHoursToggle.tsx
-│   └── preferences/
-│       ├── ChannelSettings.tsx
-│       ├── CategorySettings.tsx
-│       ├── DigestSettings.tsx
-│       └── WebhookManager.tsx
-├── services/
-│   ├── notification/
-│   │   ├── NotificationService.ts
-│   │   ├── channels/
-│   │   │   ├── BrowserChannel.ts
-│   │   │   ├── EmailChannel.ts
-│   │   │   ├── PushChannel.ts
-│   │   │   └── InAppChannel.ts
-│   │   ├── scheduler/
-│   │   │   ├── NotificationScheduler.ts
-│   │   │   └── RecurrenceEngine.ts
-│   │   └── bundling/
-│   │       ├── BundlingService.ts
-│   │       └── BundlingRules.ts
-│   └── preferences/
-│       ├── PreferenceService.ts
-│       └── PreferenceSync.ts
-├── workers/
-│   ├── notification.worker.ts
-│   └── service-worker.ts
-└── hooks/
-    ├── useNotifications.ts
-    ├── useNotificationPreferences.ts
-    └── useNotificationPermission.ts
+│   ├── ChannelSettings.tsx
+│   ├── CategorySettings.tsx
+│   ├── DigestSettings.tsx
+│   ├── NotificationBadge.tsx
+│   ├── NotificationCenter.tsx
+│   ├── NotificationItem.tsx
+│   ├── PreferenceCenter.tsx
+│   ├── QuietHoursToggle.tsx
+│   └── WebhookManager.tsx
+├── stores/
+│   ├── notificationStore.ts      // Main notification state
+│   ├── preferenceStore.ts        // User preferences
+│   ├── channelStore.ts           // Channel configurations
+│   └── historyStore.ts           // Notification history
+├── hooks/
+│   ├── useNotifications.ts       // Core notification logic
+│   ├── useNotificationPreferences.ts
+│   ├── useNotificationPermission.ts
+│   ├── useChannels.ts            // Channel management
+│   └── useWebhooks.ts            // Webhook operations
+├── effects/
+│   ├── notificationEffect.ts     // Side effects for notifications
+│   ├── channelEffect.ts          // Channel-specific effects
+│   ├── schedulerEffect.ts        // Scheduling logic
+│   └── bundlingEffect.ts         // Notification bundling
+├── types/
+│   ├── notification.types.ts     // Core notification types
+│   ├── channel.types.ts          // Channel interfaces
+│   ├── preference.types.ts       // Preference interfaces
+│   └── webhook.types.ts          // Webhook interfaces
+├── utils/
+│   ├── channels/
+│   │   ├── browserChannel.ts     // Browser push logic
+│   │   ├── emailChannel.ts       // Email sending
+│   │   ├── pushChannel.ts        // Mobile push
+│   │   └── inAppChannel.ts       // In-app notifications
+│   ├── bundling.ts               // Bundling logic
+│   ├── scheduler.ts              // Scheduling utilities
+│   └── permissions.ts            // Permission helpers
+└── workers/
+    ├── notification.worker.ts
+    └── service-worker.ts
 ```
 
 ### 7.2 Technology Stack
@@ -787,51 +794,211 @@ CREATE TABLE webhooks (
 );
 ```
 
-### 7.4 Service Interfaces
+### 7.4 Zustand Stores
 
-#### Notification Service API
+#### Notification Store
 ```typescript
-interface INotificationService {
-  // Send notifications
-  send(userId: string, notification: NotificationContent): Promise<NotificationResult>;
-  sendBatch(notifications: BatchNotification[]): Promise<BatchResult>;
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import { NotificationContent, NotificationItem, NotificationFilter } from '../types';
+
+interface NotificationStore {
+  // State
+  notifications: NotificationItem[];
+  unreadCount: number;
+  filters: NotificationFilter;
+  isLoading: boolean;
   
-  // Scheduling
-  schedule(userId: string, notification: NotificationContent, time: Date): Promise<string>;
-  cancelScheduled(notificationId: string): Promise<void>;
+  // Actions
+  addNotification: (notification: NotificationItem) => void;
+  removeNotification: (id: string) => void;
+  markAsRead: (ids: string[]) => void;
+  markAllAsRead: () => void;
   
-  // User management
-  updatePreferences(userId: string, preferences: Partial<NotificationPreferences>): Promise<void>;
-  getPreferences(userId: string): Promise<NotificationPreferences>;
+  // Filtering
+  setFilter: (filter: Partial<NotificationFilter>) => void;
+  clearFilters: () => void;
   
-  // Token management
-  registerDevice(userId: string, platform: string, token: string): Promise<void>;
-  unregisterDevice(userId: string, token: string): Promise<void>;
+  // Batch operations
+  addBatch: (notifications: NotificationItem[]) => void;
+  clearAll: () => void;
   
-  // History
-  getNotificationHistory(userId: string, filters?: NotificationFilters): Promise<NotificationLog[]>;
-  markAsRead(userId: string, notificationIds: string[]): Promise<void>;
+  // Computed
+  getFilteredNotifications: () => NotificationItem[];
 }
+
+export const useNotificationStore = create<NotificationStore>(
+  subscribeWithSelector((set, get) => ({
+    notifications: [],
+    unreadCount: 0,
+    filters: {},
+    isLoading: false,
+    
+    addNotification: (notification) => set((state) => ({
+      notifications: [notification, ...state.notifications],
+      unreadCount: state.unreadCount + (notification.read ? 0 : 1),
+    })),
+    
+    markAsRead: (ids) => set((state) => ({
+      notifications: state.notifications.map(n => 
+        ids.includes(n.id) ? { ...n, read: true } : n
+      ),
+      unreadCount: state.unreadCount - ids.length,
+    })),
+    
+    // ... other implementations
+  }))
+);
 ```
 
-#### Channel Interfaces
+#### Preference Store
 ```typescript
-interface INotificationChannel {
-  name: string;
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { NotificationPreferences, ChannelPreference } from '../types';
+
+interface PreferenceStore {
+  // State
+  globalEnabled: boolean;
+  quietHours: {
+    enabled: boolean;
+    start: string;
+    end: string;
+    weekends: boolean;
+    timezone: string;
+  };
+  channels: Record<string, ChannelPreference>;
+  categories: Record<string, CategoryPreference>;
+  bundling: BundlingRules;
   
-  // Capabilities
-  supportsRichContent: boolean;
-  supportsActions: boolean;
-  supportsScheduling: boolean;
-  
-  // Operations
-  send(recipient: string, content: NotificationContent): Promise<DeliveryResult>;
-  validateRecipient(recipient: string): Promise<boolean>;
-  getDeliveryStatus(messageId: string): Promise<DeliveryStatus>;
+  // Actions
+  updateGlobalEnabled: (enabled: boolean) => void;
+  updateQuietHours: (settings: Partial<QuietHours>) => void;
+  updateChannelPreference: (channel: string, prefs: Partial<ChannelPreference>) => void;
+  updateCategoryPreference: (category: string, prefs: Partial<CategoryPreference>) => void;
+  updateBundlingRules: (rules: Partial<BundlingRules>) => void;
+  resetToDefaults: () => void;
 }
+
+export const usePreferenceStore = create<PreferenceStore>(
+  persist(
+    (set) => ({
+      globalEnabled: true,
+      quietHours: {
+        enabled: false,
+        start: '22:00',
+        end: '08:00',
+        weekends: true,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      channels: {
+        browser: { enabled: true, maxPerDay: 20 },
+        email: { enabled: false, maxPerDay: 5 },
+        push: { enabled: false, maxPerDay: 10 },
+        inApp: { enabled: true },
+      },
+      categories: {},
+      bundling: {
+        enabled: true,
+        windowMinutes: 15,
+        maxItems: 5,
+      },
+      
+      // ... implementations
+    }),
+    {
+      name: 'notification-preferences',
+    }
+  )
+);
 ```
 
-### 7.5 Integration Patterns
+### 7.5 Custom Hooks
+
+#### useNotifications Hook
+```typescript
+// Located in: src/features/notifications/hooks/useNotifications.ts
+
+import { useNotificationStore } from '../stores/notificationStore';
+import { usePreferenceStore } from '../stores/preferenceStore';
+import { useEffect } from 'react';
+
+export const useNotifications = () => {
+  const { notifications, unreadCount, addNotification, markAsRead } = useNotificationStore();
+  const { globalEnabled, quietHours, channels } = usePreferenceStore();
+  
+  const isInQuietHours = () => {
+    if (!quietHours.enabled) return false;
+    
+    const now = new Date();
+    const start = new Date();
+    const end = new Date();
+    
+    const [startHour, startMin] = quietHours.start.split(':');
+    const [endHour, endMin] = quietHours.end.split(':');
+    
+    start.setHours(parseInt(startHour), parseInt(startMin));
+    end.setHours(parseInt(endHour), parseInt(endMin));
+    
+    return now >= start && now <= end;
+  };
+  
+  const sendNotification = async (content: NotificationContent) => {
+    if (!globalEnabled || isInQuietHours()) return;
+    
+    // Send through enabled channels
+    Object.entries(channels).forEach(([channel, prefs]) => {
+      if (prefs.enabled) {
+        // Channel-specific sending logic
+      }
+    });
+    
+    addNotification(content);
+  };
+  
+  return {
+    notifications,
+    unreadCount,
+    sendNotification,
+    markAsRead,
+    isInQuietHours,
+  };
+};
+```
+
+#### useNotificationPermission Hook
+```typescript
+// Located in: src/features/notifications/hooks/useNotificationPermission.ts
+
+import { useState, useEffect } from 'react';
+
+export const useNotificationPermission = () => {
+  const [permission, setPermission] = useState<NotificationPermission>('default');
+  
+  useEffect(() => {
+    if ('Notification' in window) {
+      setPermission(Notification.permission);
+    }
+  }, []);
+  
+  const requestPermission = async () => {
+    if ('Notification' in window) {
+      const result = await Notification.requestPermission();
+      setPermission(result);
+      return result;
+    }
+    return 'denied';
+  };
+  
+  return {
+    permission,
+    requestPermission,
+    isSupported: 'Notification' in window,
+  };
+};
+```
+
+### 7.6 Integration Patterns
 
 #### Event-Driven Architecture
 ```typescript
