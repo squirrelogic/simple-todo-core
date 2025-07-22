@@ -2,6 +2,10 @@
 
 A modern, feature-rich todo application built with Next.js, designed to help users manage their tasks efficiently with advanced features like due dates, notifications, and user authentication.
 
+## About This Project
+
+This project is a demonstration of using [Claude Core Commands](https://github.com/squirrelogic/core-commands) - a set of custom commands designed to streamline the development workflow with Claude AI. The entire application was built using these commands to showcase their effectiveness in real-world project development.
+
 ## Project Structure
 
 ```
@@ -99,6 +103,52 @@ The following features have been fully specified and are ready for implementatio
 - **Notifications**: Web Push API, SendGrid/AWS SES, FCM/APNs (planned)
 - **Testing**: Jest, React Testing Library
 - **Code Quality**: ESLint, Prettier
+
+## Development Workflow
+
+This project was created using the following Claude Core Commands workflow:
+
+### Project Setup
+```bash
+/core:project-setup simple-todo next.js
+```
+
+### Requirements Gathering
+```bash
+# Define feature requirements
+/core:requirements core-todo "As a user, I want to create, update, complete, and delete todo items so I can manage my tasks."
+/core:requirements user-auth "As a user, I want to sign in so I can securely access my todo list from any device."
+/core:requirements due-dates "As a user, I want to assign due dates to tasks so I can keep track of deadlines."
+/core:requirements notifications "As a user, I want to receive reminders so I don't forget important tasks."
+```
+
+### User Stories
+```bash
+# Generate user stories from requirements
+/core:stories core-todo
+/core:stories user-auth
+/core:stories due-dates
+/core:stories notifications
+```
+
+### Technical Implementation Plans
+```bash
+# Create detailed implementation plans
+/core:plan core-todo
+/core:plan user-auth
+/core:plan due-dates
+/core:plan notifications
+```
+
+### Feature Development
+```bash
+# Example: Implementing the core todo feature
+/core:implement core-todo
+/core:test core-todo --type all --run
+/core:review core-todo --strict
+/core:refactor core-todo --apply
+/document core-todo --generate-missing
+```
 
 ## Development
 
