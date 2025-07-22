@@ -8,6 +8,7 @@
     "build": "cd src && npm run build",
     "start": "cd src && npm run start",
     "lint": "cd src && npm run lint",
+    "type-check": "cd src && npx tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
