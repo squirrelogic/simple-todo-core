@@ -225,7 +225,6 @@ describe('TodoItem', () => {
     });
 
     it('should delete on Delete key', async () => {
-      const user = userEvent.setup();
       render(<TodoItem todo={mockTodo} />);
       
       const todoItem = screen.getByRole('listitem');
@@ -308,7 +307,6 @@ describe('TodoItem', () => {
       
       // Buttons should be invisible initially (opacity-0)
       const editButton = screen.getByLabelText('Edit "Test todo item"');
-      const deleteButton = screen.getByLabelText('Delete "Test todo item"');
       
       expect(editButton.parentElement).toHaveClass('opacity-0');
       

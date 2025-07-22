@@ -274,7 +274,7 @@ describe('TodoList', () => {
       (useTodoStore as unknown as jest.Mock).mockImplementation((selector) => {
         if (selector) {
           const state = {
-            getFilteredTodos: () => undefined as any,
+            getFilteredTodos: () => undefined as unknown as TodoItem[],
             filter: 'all',
             isLoading: false,
             loadTodos: mockLoadTodos,

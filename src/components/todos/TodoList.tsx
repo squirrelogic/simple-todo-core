@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useTodoStore } from '@/stores/todos/todo-store';
 import { TodoItem } from './TodoItem';
 
@@ -9,10 +9,37 @@ export function TodoList() {
   const filter = useTodoStore((state) => state.filter);
   const isLoading = useTodoStore((state) => state.isLoading);
   const loadTodos = useTodoStore((state) => state.loadTodos);
+  const listRef = useRef<HTMLDivElement>(null);
+  const focusedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadTodos();
   }, [loadTodos]);
+
+  // Track focused todo
+  const handleFocus = useCallback((todoId: string) => {
+    focusedIdRef.current = todoId;
+  }, []);
+
+  // Restore focus after deletion
+  useEffect(() => {
+    if (focusedIdRef.current && listRef.current) {
+      const todoIds = todos.map(t => t.id);
+      const focusedIndex = todoIds.indexOf(focusedIdRef.current);
+      
+      // If the focused todo was deleted, focus the next or previous item
+      if (focusedIndex === -1 && todos.length > 0) {
+        const todoItems = listRef.current.querySelectorAll('[role="listitem"]');
+        const targetIndex = Math.min(todoIds.length - 1, 0);
+        const targetItem = todoItems[targetIndex] as HTMLElement;
+        
+        if (targetItem) {
+          targetItem.focus();
+          focusedIdRef.current = todos[targetIndex]?.id || null;
+        }
+      }
+    }
+  }, [todos]);
 
   if (isLoading) {
     return (
@@ -38,13 +65,14 @@ export function TodoList() {
 
   return (
     <div
+      ref={listRef}
       className="space-y-2"
       role="list"
       aria-label={`${filter} todos list`}
       aria-live="polite"
     >
       {todos.map((todo) => (
-        <TodoItem key={todo.id} todo={todo} />
+        <TodoItem key={todo.id} todo={todo} onFocus={handleFocus} />
       ))}
     </div>
   );

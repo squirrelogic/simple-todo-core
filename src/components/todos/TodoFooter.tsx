@@ -1,22 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import React from 'react';
 import { useTodoStore } from '@/stores/todos/todo-store';
+import { useConfirmation } from '@/hooks/useConfirmation';
 
 export function TodoFooter() {
   const stats = useTodoStore((state) => state.getStats());
   const clearCompleted = useTodoStore((state) => state.clearCompleted);
   const toggleAll = useTodoStore((state) => state.toggleAll);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const {
+    showConfirmation: showClearConfirm,
+    requestConfirmation: requestClearConfirmation,
+    confirm: confirmClear,
+  } = useConfirmation({
+    onConfirm: clearCompleted,
+  });
 
   const handleClearCompleted = () => {
     if (showClearConfirm) {
-      clearCompleted();
-      setShowClearConfirm(false);
+      confirmClear();
     } else {
-      setShowClearConfirm(true);
-      // Auto-cancel after 3 seconds
-      setTimeout(() => setShowClearConfirm(false), 3000);
+      requestClearConfirmation();
     }
   };
 

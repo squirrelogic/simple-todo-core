@@ -1,19 +1,28 @@
 'use client';
 
-import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, KeyboardEvent, memo } from 'react';
 import { TodoItem as TodoItemType } from '@/types/todo';
 import { useTodoStore } from '@/stores/todos/todo-store';
 import { TODO_TEXT_MAX_LENGTH } from '@/lib/validation/todo';
+import { useConfirmation } from '@/hooks/useConfirmation';
 
 interface TodoItemProps {
   todo: TodoItemType;
+  onFocus?: (todoId: string) => void;
 }
 
-export function TodoItem({ todo }: TodoItemProps) {
+function TodoItemComponent({ todo, onFocus }: TodoItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(todo.text);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
+  
+  const {
+    showConfirmation: showDeleteConfirm,
+    requestConfirmation: requestDeleteConfirmation,
+    confirm: confirmDelete,
+  } = useConfirmation({
+    onConfirm: () => deleteTodo(todo.id),
+  });
   
   const { toggleTodo, updateTodo, deleteTodo } = useTodoStore();
 
@@ -53,11 +62,9 @@ export function TodoItem({ todo }: TodoItemProps) {
 
   const handleDelete = () => {
     if (showDeleteConfirm) {
-      deleteTodo(todo.id);
+      confirmDelete();
     } else {
-      setShowDeleteConfirm(true);
-      // Auto-cancel after 3 seconds
-      setTimeout(() => setShowDeleteConfirm(false), 3000);
+      requestDeleteConfirmation();
     }
   };
 
@@ -82,6 +89,7 @@ export function TodoItem({ todo }: TodoItemProps) {
       role="listitem"
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onFocus={() => onFocus?.(todo.id)}
       aria-label={`Todo: ${todo.text}, ${todo.completed ? 'completed' : 'active'}`}
     >
       <input
@@ -151,3 +159,5 @@ export function TodoItem({ todo }: TodoItemProps) {
     </div>
   );
 }
+
+export const TodoItem = memo(TodoItemComponent);
