@@ -5,7 +5,6 @@ import { TodoItem, FilterType } from '@/types/todo';
 import { validateTodoText, sanitizeTodoText } from '@/lib/validation/todo';
 import { todoStorage } from '@/lib/storage/todo-storage';
 import { applyFilter, getTodoStats } from '@/lib/utils/todo-filters';
-import { persistence, logger, devtools, compose } from '@/stores/middleware';
 
 interface TodoState {
   todos: TodoItem[];
@@ -29,27 +28,15 @@ interface TodoActions {
 
 type TodoStore = TodoState & TodoActions;
 
-// Create middleware stack
-const middlewareStack = compose<TodoStore>(
-  immer,
-  persistence<TodoStore>({
-    persist: (state) => {
-      todoStorage.save(state.todos, state.filter);
-    },
-    debounceMs: 500,
-  }),
-  logger<TodoStore>({
-    name: 'TodoStore',
-    collapsed: true,
-    diff: true,
-  }),
-  devtools<TodoStore>({
-    name: 'TodoStore',
-  })
-);
-
 export const useTodoStore = create<TodoStore>()(
-  middlewareStack((set, get) => ({
+  immer((set, get) => {
+    // Helper to persist state after mutations
+    const persistState = () => {
+      const { todos, filter } = get();
+      todoStorage.save(todos, filter);
+    };
+
+    return {
     // Initial state
     todos: [],
     filter: 'all',
@@ -84,6 +71,9 @@ export const useTodoStore = create<TodoStore>()(
           state.todos.unshift(newTodo);
           state.error = null;
         });
+
+        // Save to storage
+        persistState();
         
         return { success: true };
       } catch (error) {
@@ -127,6 +117,9 @@ export const useTodoStore = create<TodoStore>()(
           });
           return { success: false, error };
         }
+
+        // Save to storage
+        persistState();
         
         return { success: true };
       } catch (error) {
@@ -146,18 +139,27 @@ export const useTodoStore = create<TodoStore>()(
           state.todos[todoIndex].updatedAt = Date.now();
         }
       });
+
+      // Save to storage
+      persistState();
     },
 
     deleteTodo: (id: string) => {
       set((state) => {
         state.todos = state.todos.filter(todo => todo.id !== id);
       });
+
+      // Save to storage
+      persistState();
     },
 
     clearCompleted: () => {
       set((state) => {
         state.todos = state.todos.filter(todo => !todo.completed);
       });
+
+      // Save to storage
+      persistState();
     },
 
     toggleAll: () => {
@@ -170,12 +172,18 @@ export const useTodoStore = create<TodoStore>()(
           todo.updatedAt = now;
         });
       });
+
+      // Save to storage
+      persistState();
     },
 
     setFilter: (filter: FilterType) => {
       set((state) => {
         state.filter = filter;
       });
+
+      // Save to storage
+      persistState();
     },
 
     loadTodos: () => {
@@ -203,5 +211,6 @@ export const useTodoStore = create<TodoStore>()(
       const { todos } = get();
       return getTodoStats(todos);
     },
-  }))
+    };
+  })
 );

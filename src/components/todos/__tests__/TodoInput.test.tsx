@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TodoInput } from '../TodoInput';
 import { useTodoStore } from '@/stores/todos/todo-store';
@@ -12,6 +12,9 @@ describe('TodoInput', () => {
   
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default to successful response
+    mockAddTodo.mockResolvedValue({ success: true });
+    
     (useTodoStore as unknown as jest.Mock).mockImplementation((selector) => {
       if (typeof selector === 'function') {
         const state = {
@@ -114,24 +117,57 @@ describe('TodoInput', () => {
     expect(charCount).toHaveClass('text-orange-500');
   });
 
-  it('should display store error if present', () => {
-    (useTodoStore as unknown as jest.Mock).mockImplementation((selector) => {
-      if (typeof selector === 'function') {
-        const state = {
-          addTodo: mockAddTodo,
-          error: 'Todo text cannot exceed 255 characters',
-        };
-        return selector(state);
-      }
-      return {
-        addTodo: mockAddTodo,
-        error: 'Todo text cannot exceed 255 characters',
-      };
+  it('should display error when addTodo fails', async () => {
+    const user = userEvent.setup();
+    mockAddTodo.mockResolvedValueOnce({ 
+      success: false, 
+      error: 'Todo text cannot exceed 255 characters' 
     });
     
     render(<TodoInput />);
     
-    expect(screen.getByText('Todo text cannot exceed 255 characters')).toBeInTheDocument();
+    const input = screen.getByPlaceholderText('What needs to be done?');
+    await user.type(input, 'Test todo');
+    await user.type(input, '{enter}');
+    
+    expect(await screen.findByText('Todo text cannot exceed 255 characters')).toBeInTheDocument();
+    expect(input).toHaveValue('Test todo'); // Input should not be cleared on error
+  });
+
+  it('should disable input while submitting', async () => {
+    const user = userEvent.setup();
+    let resolvePromise: (value: { success: boolean; error?: string }) => void;
+    const promise = new Promise<{ success: boolean; error?: string }>((resolve) => {
+      resolvePromise = resolve;
+    });
+    mockAddTodo.mockReturnValueOnce(promise);
+    
+    render(<TodoInput />);
+    
+    const input = screen.getByPlaceholderText('What needs to be done?');
+    await user.type(input, 'Test todo');
+    
+    // Start submission
+    const submitPromise = user.type(input, '{enter}');
+    
+    // Input should be disabled while submitting
+    await waitFor(() => {
+      expect(input).toBeDisabled();
+    });
+    
+    // Resolve the promise
+    await act(async () => {
+      resolvePromise!({ success: true });
+    });
+    
+    // Wait for submission to complete
+    await submitPromise;
+    
+    // Input should be enabled again and cleared
+    await waitFor(() => {
+      expect(input).not.toBeDisabled();
+      expect(input).toHaveValue('');
+    });
   });
 
   it('should have proper ARIA attributes', () => {

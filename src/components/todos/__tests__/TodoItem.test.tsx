@@ -23,10 +23,21 @@ describe('TodoItem', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (useTodoStore as unknown as jest.Mock).mockReturnValue({
-      toggleTodo: mockToggleTodo,
-      updateTodo: mockUpdateTodo,
-      deleteTodo: mockDeleteTodo,
+    // Default to successful response
+    mockUpdateTodo.mockResolvedValue({ success: true });
+    
+    (useTodoStore as unknown as jest.Mock).mockImplementation((selector) => {
+      const state = {
+        toggleTodo: mockToggleTodo,
+        updateTodo: mockUpdateTodo,
+        deleteTodo: mockDeleteTodo,
+      };
+      
+      if (typeof selector === 'function') {
+        return selector(state);
+      }
+      
+      return state;
     });
   });
 
@@ -212,6 +223,30 @@ describe('TodoItem', () => {
     });
     
     jest.useRealTimers();
+  });
+
+  it('should display error when update fails', async () => {
+    const user = userEvent.setup();
+    mockUpdateTodo.mockResolvedValueOnce({ 
+      success: false, 
+      error: 'Update failed' 
+    });
+    
+    render(<TodoItem todo={mockTodo} />);
+    
+    // Enter edit mode
+    const editButton = screen.getByLabelText('Edit "Test todo item"');
+    await user.click(editButton);
+    
+    // Change text and submit
+    const input = screen.getByLabelText('Edit todo text');
+    await user.clear(input);
+    await user.type(input, 'Updated text');
+    await user.type(input, '{enter}');
+    
+    // Should show error
+    expect(await screen.findByText('Update failed')).toBeInTheDocument();
+    expect(input).toHaveValue('Updated text'); // Input should remain in edit mode
   });
 
   describe('Keyboard navigation', () => {

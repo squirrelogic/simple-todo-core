@@ -231,7 +231,7 @@ describe('TodoFilter', () => {
           const state = {
             filter: 'all',
             setFilter: mockSetFilter,
-            getStats: () => ({ total: undefined, active: undefined, completed: undefined } as { total: number; active: number; completed: number }),
+            getStats: () => ({ total: 0, active: 0, completed: 0 }),
           };
           return selector(state);
         }

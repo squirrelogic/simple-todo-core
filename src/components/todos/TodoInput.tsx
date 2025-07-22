@@ -9,10 +9,10 @@ const CHARACTER_WARNING_THRESHOLD = 20;
 export function TodoInput() {
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const addTodo = useTodoStore((state) => state.addTodo);
-  const storeError = useTodoStore((state) => state.error);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
     if (!inputValue.trim()) {
@@ -20,13 +20,19 @@ export function TodoInput() {
       return;
     }
 
-    addTodo(inputValue);
+    setIsSubmitting(true);
+    setError(null);
+
+    const result = await addTodo(inputValue);
     
-    // Clear input if successful (no store error)
-    if (!storeError) {
+    if (result.success) {
       setInputValue('');
       setError(null);
+    } else {
+      setError(result.error || 'Failed to add todo');
     }
+
+    setIsSubmitting(false);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -36,7 +42,6 @@ export function TodoInput() {
     }
   };
 
-  const displayError = error || storeError;
   const remainingChars = TODO_TEXT_MAX_LENGTH - inputValue.length;
   const isNearLimit = remainingChars <= CHARACTER_WARNING_THRESHOLD;
 
@@ -52,11 +57,12 @@ export function TodoInput() {
           }}
           onKeyDown={handleKeyDown}
           placeholder="What needs to be done?"
-          className="w-full px-4 py-3 pr-20 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 pr-20 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           maxLength={TODO_TEXT_MAX_LENGTH}
           aria-label="New todo input"
-          aria-invalid={!!displayError}
-          aria-describedby={displayError ? 'todo-input-error' : undefined}
+          aria-invalid={!!error}
+          aria-describedby={error ? 'todo-input-error' : undefined}
+          disabled={isSubmitting}
         />
         {inputValue && (
           <span
@@ -70,13 +76,13 @@ export function TodoInput() {
           </span>
         )}
       </div>
-      {displayError && (
+      {error && (
         <p
           id="todo-input-error"
           className="mt-1 text-sm text-red-600"
           role="alert"
         >
-          {displayError}
+          {error}
         </p>
       )}
     </form>

@@ -251,7 +251,7 @@ describe('TodoFooter', () => {
       (useTodoStore as unknown as jest.Mock).mockImplementation((selector) => {
         if (selector) {
           const state = {
-            getStats: () => ({ total: undefined, active: undefined, completed: undefined } as { total: number; active: number; completed: number }),
+            getStats: () => ({ total: 0, active: 0, completed: 0 }),
             clearCompleted: mockClearCompleted,
             toggleAll: mockToggleAll,
           };
