@@ -10,7 +10,10 @@
     "lint": "cd src && npm run lint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "docs": "echo 'Documentation is in the docs/ directory'",
+    "docs:serve": "npx http-server docs -p 8080 -o",
+    "docs:check": "find docs -name '*.md' -type f | wc -l"
   },
   "engines": {
     "node": ">=18.0.0"

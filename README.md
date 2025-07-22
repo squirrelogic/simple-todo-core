@@ -77,12 +77,23 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## Features
 
-### Current Specifications
+### Implemented Features
 
-The following features have been fully specified and are ready for implementation:
+#### ✅ Core Todo Management
+The core todo feature is fully implemented with:
+- Create, read, update, and delete todos
+- Filter by status (all, active, completed)
+- Bulk operations (toggle all, clear completed)
+- Local storage persistence with automatic saving
+- Comprehensive error handling and recovery
+- Performance optimizations with memoization
+- Full test coverage (183 tests)
+
+See [Core Todo Documentation](docs/features/core-todo.md) for detailed information.
+
+### Specified Features (Ready for Implementation)
 
 #### Core Features
-- **[Core Todo Management](specs/core-todo.spec.md)** - Create, read, update, and delete todos with local storage persistence
 - **[User Authentication](specs/user-auth.spec.md)** - Secure multi-provider authentication with email, Google, and GitHub OAuth
 - **[Due Dates](specs/due-dates.spec.md)** - Assign deadlines, set reminders, and manage time-sensitive tasks with recurring options
 - **[Notifications & Reminders](specs/notifications.spec.md)** - Multi-channel notification system with browser, email, and mobile push support
@@ -98,11 +109,14 @@ The following features have been fully specified and are ready for implementatio
 ## Technology Stack
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS v4
-- **State Management**: React Context API, localStorage (future: PostgreSQL)
+- **State Management**: Zustand with middleware pattern, localStorage persistence
+- **Error Handling**: Custom error boundaries, Result pattern for async operations
+- **Performance**: Memoized selectors, React.memo, debounced persistence
+- **Developer Tools**: Store inspector, debug panel (development mode)
 - **Authentication**: NextAuth.js (planned)
 - **Notifications**: Web Push API, SendGrid/AWS SES, FCM/APNs (planned)
-- **Testing**: Jest, React Testing Library
-- **Code Quality**: ESLint, Prettier
+- **Testing**: Jest, React Testing Library (100% coverage for core features)
+- **Code Quality**: ESLint, Prettier, TypeScript strict mode
 
 ## Development Workflow
 
@@ -143,11 +157,21 @@ This project was created using the following Claude Core Commands workflow:
 ### Feature Development
 ```bash
 # Example: Implementing the core todo feature
-/core:implement core-todo
-/core:test core-todo --type all --run
-/core:review core-todo --strict
-/core:refactor core-todo --apply
-/document core-todo --generate-missing
+1.  /core:implement core-todo
+    /core:test core-todo --type all --run
+
+    /core:review core-todo --strict
+    /core:implement core-todo "a code review has been created. Fix all of the issues that
+    are identified in '/workspaces/simple-todo/reviews/core-todo.review.md'"
+    /core:review core-todo --strict
+
+    /core:refactor core-todo --apply
+
+    — manual prompt  —
+    create a plan to implement the refactoring suggestions defined in ‘/workspaces/simple-todo/refactorings/core-todo.refactor.md’, save the comprehensive plan to ‘core-todo-refactor.implementation-plan’ and then implement the plan.
+    — manual prompt  —
+
+    /core:document core-todo --generate-missing
 ```
 
 ## Development
