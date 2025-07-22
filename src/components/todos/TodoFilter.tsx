@@ -1,9 +1,10 @@
 'use client';
 
+import React from 'react';
 import { FilterType } from '@/types/todo';
 import { useTodoStore } from '@/stores/todos/todo-store';
 
-export function TodoFilter() {
+export const TodoFilter = React.memo(function TodoFilter() {
   const filter = useTodoStore((state) => state.filter);
   const setFilter = useTodoStore((state) => state.setFilter);
   const stats = useTodoStore((state) => state.getStats());
@@ -38,4 +39,4 @@ export function TodoFilter() {
       ))}
     </div>
   );
-}
+});

@@ -72,8 +72,11 @@ describe('TodoStorage', () => {
       }).not.toThrow();
 
       expect(console.error).toHaveBeenCalledWith(
-        'Failed to save todos to localStorage:',
-        expect.any(Error)
+        'Application Error:',
+        expect.objectContaining({
+          name: 'StorageError',
+          code: 'STORAGE_ERROR'
+        })
       );
     });
   });
@@ -131,8 +134,11 @@ describe('TodoStorage', () => {
       const result = todoStorage.load();
       expect(result).toBeNull();
       expect(console.error).toHaveBeenCalledWith(
-        'Failed to load todos from localStorage:',
-        expect.any(Error)
+        'Application Error:',
+        expect.objectContaining({
+          name: 'UnknownError',
+          code: 'UNKNOWN_ERROR'
+        })
       );
     });
 
@@ -145,8 +151,11 @@ describe('TodoStorage', () => {
       const result = todoStorage.load();
       expect(result).toBeNull();
       expect(console.error).toHaveBeenCalledWith(
-        'Failed to load todos from localStorage:',
-        expect.any(Error)
+        'Application Error:',
+        expect.objectContaining({
+          name: 'UnknownError',
+          code: 'UNKNOWN_ERROR'
+        })
       );
     });
   });
@@ -172,8 +181,11 @@ describe('TodoStorage', () => {
       }).not.toThrow();
 
       expect(console.error).toHaveBeenCalledWith(
-        'Failed to clear todos from localStorage:',
-        expect.any(Error)
+        'Application Error:',
+        expect.objectContaining({
+          name: 'UnknownError',
+          code: 'UNKNOWN_ERROR'
+        })
       );
     });
   });

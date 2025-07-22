@@ -1,4 +1,6 @@
 import { TodoItem, FilterType } from '@/types/todo';
+import { StorageError } from '@/types/errors';
+import { trySync, logError } from '@/lib/errors/error-utils';
 
 const STORAGE_KEY = 'simple-todo-app';
 const STORAGE_VERSION = 1;
@@ -19,7 +21,7 @@ interface StorageData {
 
 export const todoStorage = {
   save(todos: TodoItem[], filter: FilterType): void {
-    try {
+    const result = trySync(() => {
       const data: StorageData = {
         version: STORAGE_VERSION,
         todos,
@@ -32,19 +34,20 @@ export const todoStorage = {
       } catch (storageError) {
         // Handle quota exceeded error
         if (isQuotaExceededError(storageError)) {
-          console.error('Storage quota exceeded. Unable to save todos.');
-          // Could emit an event or callback here to notify the UI
+          throw new StorageError('Storage quota exceeded. Unable to save todos.', 'save');
         } else {
           throw storageError;
         }
       }
-    } catch (error) {
-      console.error('Failed to save todos to localStorage:', error);
+    });
+
+    if (!result.success) {
+      logError(result.error, { operation: 'save', itemCount: todos.length });
     }
   },
 
   load(): { todos: TodoItem[]; filter: FilterType } | null {
-    try {
+    const result = trySync(() => {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (!stored) return null;
 
@@ -60,17 +63,23 @@ export const todoStorage = {
         todos: data.todos || [],
         filter: data.filter || 'all',
       };
-    } catch (error) {
-      console.error('Failed to load todos from localStorage:', error);
+    });
+
+    if (!result.success) {
+      logError(result.error, { operation: 'load' });
       return null;
     }
+
+    return result.data;
   },
 
   clear(): void {
-    try {
+    const result = trySync(() => {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (error) {
-      console.error('Failed to clear todos from localStorage:', error);
+    });
+
+    if (!result.success) {
+      logError(result.error, { operation: 'clear' });
     }
   },
 

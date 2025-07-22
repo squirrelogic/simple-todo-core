@@ -9,7 +9,7 @@ interface TodoCheckboxProps {
   label: string;
 }
 
-export function TodoCheckbox({ checked, onChange, disabled, label }: TodoCheckboxProps) {
+export const TodoCheckbox = React.memo(function TodoCheckbox({ checked, onChange, disabled, label }: TodoCheckboxProps) {
   return (
     <input
       type="checkbox"
@@ -20,4 +20,4 @@ export function TodoCheckbox({ checked, onChange, disabled, label }: TodoCheckbo
       aria-label={label}
     />
   );
-}
+});

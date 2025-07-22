@@ -11,7 +11,7 @@ interface TodoActionsProps {
   todoText: string;
 }
 
-export function TodoActions({
+export const TodoActions = React.memo(function TodoActions({
   isEditing,
   showDeleteConfirm,
   onEdit,
@@ -43,4 +43,4 @@ export function TodoActions({
       </button>
     </div>
   );
-}
+});

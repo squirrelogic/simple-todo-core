@@ -2,10 +2,14 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { TodoList } from '../TodoList';
 import { useTodoStore } from '@/stores/todos/todo-store';
+import { useFilteredTodos } from '@/stores/todos/selectors';
 import { TodoItem } from '@/types/todo';
 
 // Mock the store
 jest.mock('@/stores/todos/todo-store');
+
+// Mock the selectors
+jest.mock('@/stores/todos/selectors');
 
 // Mock the TodoItem component
 jest.mock('../TodoItem', () => ({
@@ -43,6 +47,9 @@ describe('TodoList', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    
+    // Default mock implementation for useFilteredTodos
+    (useFilteredTodos as jest.Mock).mockReturnValue([]);
   });
 
   describe('Loading state', () => {
@@ -145,6 +152,8 @@ describe('TodoList', () => {
 
   describe('Rendering todos', () => {
     it('should render all todos when filter is "all"', () => {
+      (useFilteredTodos as jest.Mock).mockReturnValue(mockTodos);
+      
       (useTodoStore as unknown as jest.Mock).mockImplementation((selector) => {
         if (selector) {
           const state = {

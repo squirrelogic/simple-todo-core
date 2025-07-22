@@ -6,6 +6,27 @@ interface PersistenceConfig<T> extends MiddlewareConfig {
   debounceMs?: number;
 }
 
+/**
+ * Persistence middleware for Zustand stores
+ * Automatically persists state changes with optional debouncing
+ * 
+ * @template T - The store state type
+ * @param {PersistenceConfig<T>} config - Persistence configuration
+ * @param {(state: T) => void} config.persist - Function to persist state
+ * @param {number} [config.debounceMs=0] - Debounce delay in milliseconds
+ * @param {boolean} [config.enabled=true] - Whether persistence is enabled
+ * @returns {Middleware} Zustand middleware function
+ * 
+ * @example
+ * const store = create(
+ *   persistence({
+ *     persist: (state) => localStorage.setItem('key', JSON.stringify(state)),
+ *     debounceMs: 500
+ *   })((set) => ({
+ *     // ... store implementation
+ *   }))
+ * );
+ */
 export const persistence = <T extends object>(
   config: PersistenceConfig<T>
 ) => (

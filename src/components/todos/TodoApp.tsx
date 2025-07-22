@@ -5,6 +5,11 @@ import { TodoList } from './TodoList';
 import { TodoFilter } from './TodoFilter';
 import { TodoFooter } from './TodoFooter';
 
+// Load store inspector in development
+if (process.env.NODE_ENV === 'development') {
+  import('@/lib/dev/store-inspector');
+}
+
 export function TodoApp() {
   return (
     <div className="max-w-2xl mx-auto p-4">

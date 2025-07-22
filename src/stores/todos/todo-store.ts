@@ -6,6 +6,8 @@ import { validateTodoText, sanitizeTodoText } from '@/lib/validation/todo';
 import { todoStorage } from '@/lib/storage/todo-storage';
 import { applyFilter, getTodoStats } from '@/lib/utils/todo-filters';
 import { persistence, logger, devtools, compose } from '@/stores/middleware';
+import { ValidationError, NotFoundError, StorageError } from '@/types/errors';
+import { tryAsync, normalizeError, getUserMessage } from '@/lib/errors/error-utils';
 
 interface TodoState {
   todos: TodoItem[];
@@ -58,84 +60,83 @@ export const useTodoStore = create<TodoStore>()(
 
     // Actions
     addTodo: async (text: string) => {
-      const validation = validateTodoText(text);
-      
-      if (!validation.isValid) {
-        const error = validation.error || 'Invalid todo text';
-        set((state) => {
-          state.error = error;
-        });
-        return { success: false, error };
-      }
+      const result = await tryAsync(async () => {
+        // Validate input
+        const validation = validateTodoText(text);
+        if (!validation.isValid) {
+          throw new ValidationError(validation.error || 'Invalid todo text', 'text', text);
+        }
 
-      const sanitizedText = sanitizeTodoText(text);
-      const now = Date.now();
-      
-      const newTodo: TodoItem = {
-        id: uuidv4(),
-        text: sanitizedText,
-        completed: false,
-        createdAt: now,
-        updatedAt: now,
-      };
+        // Create new todo
+        const sanitizedText = sanitizeTodoText(text);
+        const now = Date.now();
+        
+        const newTodo: TodoItem = {
+          id: uuidv4(),
+          text: sanitizedText,
+          completed: false,
+          createdAt: now,
+          updatedAt: now,
+        };
 
-      try {
+        // Update state
         set((state) => {
           state.todos.unshift(newTodo);
           state.error = null;
         });
         
-        return { success: true };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to add todo';
+        return newTodo;
+      });
+
+      if (!result.success) {
+        const userMessage = getUserMessage(result.error);
         set((state) => {
-          state.error = errorMessage;
+          state.error = userMessage;
         });
-        return { success: false, error: errorMessage };
+        return { success: false, error: userMessage };
       }
+
+      return { success: true };
     },
 
     updateTodo: async (id: string, text: string) => {
-      const validation = validateTodoText(text);
-      
-      if (!validation.isValid) {
-        const error = validation.error || 'Invalid todo text';
-        set((state) => {
-          state.error = error;
-        });
-        return { success: false, error };
-      }
+      const result = await tryAsync(async () => {
+        // Validate input
+        const validation = validateTodoText(text);
+        if (!validation.isValid) {
+          throw new ValidationError(validation.error || 'Invalid todo text', 'text', text);
+        }
 
-      const sanitizedText = sanitizeTodoText(text);
+        const sanitizedText = sanitizeTodoText(text);
 
-      try {
-        let found = false;
+        // Find and update todo
+        let updatedTodo: TodoItem | null = null;
         set((state) => {
           const todoIndex = state.todos.findIndex(todo => todo.id === id);
           if (todoIndex !== -1) {
             state.todos[todoIndex].text = sanitizedText;
             state.todos[todoIndex].updatedAt = Date.now();
-            found = true;
+            updatedTodo = state.todos[todoIndex];
           }
           state.error = null;
         });
 
-        if (!found) {
-          const error = 'Todo not found';
-          set((state) => {
-            state.error = error;
-          });
-          return { success: false, error };
+        if (!updatedTodo) {
+          throw new NotFoundError('Todo', id);
         }
         
-        return { success: true };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to update todo';
+        return updatedTodo;
+      });
+
+      if (!result.success) {
+        const userMessage = getUserMessage(result.error);
         set((state) => {
-          state.error = errorMessage;
+          state.error = userMessage;
         });
-        return { success: false, error: errorMessage };
+        return { success: false, error: userMessage };
       }
+
+      return { success: true };
     },
 
     toggleTodo: (id: string) => {
