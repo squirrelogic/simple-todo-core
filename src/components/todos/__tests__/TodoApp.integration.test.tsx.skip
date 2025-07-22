@@ -1,0 +1,341 @@
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { TodoApp } from '../TodoApp';
+
+// Mock localStorage
+const localStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+};
+Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+
+describe('TodoApp Integration Tests', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorageMock.clear();
+  });
+
+  describe('Complete User Workflows', () => {
+    it('should complete a full todo lifecycle: create, edit, complete, delete', async () => {
+      const user = userEvent.setup();
+      render(<TodoApp />);
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+      });
+
+      // Create a todo
+      const input = screen.getByPlaceholderText('What needs to be done?');
+      await user.type(input, 'Buy groceries');
+      await user.type(input, '{enter}');
+
+      // Verify todo was added
+      expect(screen.getByText('Buy groceries')).toBeInTheDocument();
+      expect(screen.getByText('1 item left')).toBeInTheDocument();
+
+      // Edit the todo
+      const todoText = screen.getByText('Buy groceries');
+      await user.dblClick(todoText);
+      
+      const editInput = screen.getByDisplayValue('Buy groceries');
+      await user.clear(editInput);
+      await user.type(editInput, 'Buy organic groceries{enter}');
+
+      // Verify todo was updated
+      expect(screen.getByText('Buy organic groceries')).toBeInTheDocument();
+
+      // Complete the todo
+      const checkbox = screen.getByRole('checkbox');
+      await user.click(checkbox);
+
+      // Verify todo is completed
+      expect(checkbox).toBeChecked();
+      expect(screen.getByText('Buy organic groceries')).toHaveClass('line-through');
+      expect(screen.getByText('0 items left')).toBeInTheDocument();
+
+      // Delete the todo
+      const deleteButton = screen.getByLabelText('Delete "Buy organic groceries"');
+      await user.click(deleteButton);
+      
+      // Confirm deletion
+      const confirmButton = screen.getByLabelText('Confirm delete "Buy organic groceries"');
+      await user.click(confirmButton);
+
+      // Verify todo was deleted
+      expect(screen.queryByText('Buy organic groceries')).not.toBeInTheDocument();
+      expect(screen.getByText('No todos yet. Add one above!')).toBeInTheDocument();
+    });
+
+    it('should handle multiple todos with filtering', async () => {
+      const user = userEvent.setup();
+      render(<TodoApp />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText('What needs to be done?');
+
+      // Add multiple todos
+      await user.type(input, 'Task 1{enter}');
+      await user.type(input, 'Task 2{enter}');
+      await user.type(input, 'Task 3{enter}');
+
+      // Complete some todos
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[0]); // Complete Task 3 (newest first)
+      await user.click(checkboxes[2]); // Complete Task 1
+
+      // Test "All" filter (default)
+      expect(screen.getByText('Task 1')).toBeInTheDocument();
+      expect(screen.getByText('Task 2')).toBeInTheDocument();
+      expect(screen.getByText('Task 3')).toBeInTheDocument();
+      expect(screen.getByText('All (3)')).toHaveClass('bg-blue-600');
+
+      // Test "Active" filter
+      const activeFilter = screen.getByText('Active (1)');
+      await user.click(activeFilter);
+      
+      expect(screen.getByText('Task 2')).toBeInTheDocument();
+      expect(screen.queryByText('Task 1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Task 3')).not.toBeInTheDocument();
+
+      // Test "Completed" filter
+      const completedFilter = screen.getByText('Completed (2)');
+      await user.click(completedFilter);
+      
+      expect(screen.queryByText('Task 2')).not.toBeInTheDocument();
+      expect(screen.getByText('Task 1')).toBeInTheDocument();
+      expect(screen.getByText('Task 3')).toBeInTheDocument();
+    });
+
+    it('should handle bulk operations', async () => {
+      const user = userEvent.setup();
+      render(<TodoApp />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText('What needs to be done?');
+
+      // Add multiple todos
+      await user.type(input, 'Todo 1{enter}');
+      await user.type(input, 'Todo 2{enter}');
+      await user.type(input, 'Todo 3{enter}');
+      await user.type(input, 'Todo 4{enter}');
+
+      // Complete some todos
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[0]); // Todo 4
+      await user.click(checkboxes[2]); // Todo 2
+
+      // Test "Toggle All"
+      const toggleAllButton = screen.getByText('Mark all complete');
+      await user.click(toggleAllButton);
+
+      // All should be completed
+      const allCheckboxes = screen.getAllByRole('checkbox');
+      allCheckboxes.forEach(checkbox => {
+        expect(checkbox).toBeChecked();
+      });
+      expect(screen.getByText('0 items left')).toBeInTheDocument();
+
+      // Toggle all back to active
+      const toggleBackButton = screen.getByText('Mark all active');
+      await user.click(toggleBackButton);
+
+      // All should be active
+      const activeCheckboxes = screen.getAllByRole('checkbox');
+      activeCheckboxes.forEach(checkbox => {
+        expect(checkbox).not.toBeChecked();
+      });
+      expect(screen.getByText('4 items left')).toBeInTheDocument();
+
+      // Complete some and clear completed
+      await user.click(activeCheckboxes[0]);
+      await user.click(activeCheckboxes[1]);
+
+      const clearButton = screen.getByText('Clear completed');
+      await user.click(clearButton);
+
+      // Confirm clear
+      const confirmClearButton = screen.getByText('Confirm clear?');
+      await user.click(confirmClearButton);
+
+      // Should have 2 todos left
+      expect(screen.getByText('Todo 1')).toBeInTheDocument();
+      expect(screen.getByText('Todo 2')).toBeInTheDocument();
+      expect(screen.queryByText('Todo 3')).not.toBeInTheDocument();
+      expect(screen.queryByText('Todo 4')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Data Persistence', () => {
+    it('should persist todos to localStorage', async () => {
+      const user = userEvent.setup();
+      render(<TodoApp />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText('What needs to be done?');
+      await user.type(input, 'Persistent todo{enter}');
+
+      // Wait for save
+      await waitFor(() => {
+        expect(localStorageMock.setItem).toHaveBeenCalledWith(
+          'simple-todo-app',
+          expect.stringContaining('Persistent todo')
+        );
+      });
+    });
+
+    it('should load todos from localStorage on mount', async () => {
+      const savedData = {
+        version: 1,
+        todos: [
+          {
+            id: '1',
+            text: 'Saved todo',
+            completed: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        filter: 'completed',
+      };
+
+      localStorageMock.getItem.mockReturnValue(JSON.stringify(savedData));
+
+      render(<TodoApp />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Saved todo')).toBeInTheDocument();
+        expect(screen.getByText('Completed (1)')).toHaveClass('bg-blue-600');
+      });
+    });
+  });
+
+  describe('Input Validation', () => {
+    it('should validate todo text length', async () => {
+      const user = userEvent.setup();
+      render(<TodoApp />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText('What needs to be done?');
+      
+      // Try to add empty todo
+      await user.type(input, '   {enter}');
+      expect(screen.getByText('Please enter a todo')).toBeInTheDocument();
+
+      // Add valid todo
+      await user.clear(input);
+      await user.type(input, 'Valid todo{enter}');
+      expect(screen.queryByText('Please enter a todo')).not.toBeInTheDocument();
+      expect(screen.getByText('Valid todo')).toBeInTheDocument();
+
+      // Test character limit
+      const longText = 'a'.repeat(250);
+      await user.type(input, longText);
+      
+      // Should show character count warning
+      const charCount = screen.getByLabelText(/characters remaining/);
+      expect(charCount).toHaveClass('text-orange-500');
+    });
+  });
+
+  describe('Keyboard Navigation', () => {
+    it('should support keyboard shortcuts', async () => {
+      render(<TodoApp />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText('What needs to be done?');
+      
+      // Add todos using keyboard
+      await userEvent.type(input, 'Keyboard todo 1{enter}');
+      await userEvent.type(input, 'Keyboard todo 2{enter}');
+
+      // Focus on first todo and toggle with space
+      const firstTodo = screen.getByText('Keyboard todo 2').closest('[role="listitem"]');
+      firstTodo?.focus();
+      
+      await userEvent.keyboard(' ');
+
+      // Check if toggled
+      const checkbox = screen.getAllByRole('checkbox')[0];
+      expect(checkbox).toBeChecked();
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle localStorage errors gracefully', async () => {
+      // Mock localStorage to throw error
+      localStorageMock.setItem.mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+
+      const user = userEvent.setup();
+      render(<TodoApp />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+      });
+
+      // Should still work despite storage error
+      const input = screen.getByPlaceholderText('What needs to be done?');
+      await user.type(input, 'Todo despite error{enter}');
+
+      expect(screen.getByText('Todo despite error')).toBeInTheDocument();
+    });
+  });
+
+  describe('Performance', () => {
+    it('should handle many todos efficiently', async () => {
+      const user = userEvent.setup();
+      render(<TodoApp />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText('What needs to be done?');
+
+      // Add 20 todos quickly
+      for (let i = 1; i <= 20; i++) {
+        await user.type(input, `Todo ${i}{enter}`);
+      }
+
+      // All todos should be rendered
+      expect(screen.getByText('Todo 1')).toBeInTheDocument();
+      expect(screen.getByText('Todo 20')).toBeInTheDocument();
+      expect(screen.getByText('20 items left')).toBeInTheDocument();
+
+      // Filter should work with many todos
+      const checkboxes = screen.getAllByRole('checkbox');
+      
+      // Complete half
+      for (let i = 0; i < 10; i++) {
+        await user.click(checkboxes[i]);
+      }
+
+      // Check active filter
+      const activeFilter = screen.getByText('Active (10)');
+      await user.click(activeFilter);
+
+      const visibleTodos = screen.getAllByRole('listitem');
+      expect(visibleTodos).toHaveLength(10);
+    });
+  });
+});

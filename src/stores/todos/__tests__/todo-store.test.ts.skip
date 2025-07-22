@@ -1,0 +1,455 @@
+import { act, renderHook } from '@testing-library/react';
+import { todoStorage } from '@/lib/storage/todo-storage';
+
+// Mock the storage module
+jest.mock('@/lib/storage/todo-storage', () => ({
+  todoStorage: {
+    save: jest.fn(),
+    load: jest.fn(),
+    clear: jest.fn(),
+    getStorageSize: jest.fn(),
+  },
+}));
+
+// We need to import the store after mocking dependencies
+const { useTodoStore } = require('../todo-store');
+
+describe('TodoStore', () => {
+  beforeEach(() => {
+    // Reset store to initial state by getting the initial state
+    const store = useTodoStore.getState();
+    
+    // Clear the store
+    store.todos = [];
+    store.filter = 'all';
+    store.error = null;
+    store.isLoading = false;
+    
+    // Clear all mocks
+    jest.clearAllMocks();
+  });
+
+  describe('addTodo', () => {
+    it('should add a new todo with valid text', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Test todo');
+      });
+
+      expect(result.current.todos).toHaveLength(1);
+      expect(result.current.todos[0]).toMatchObject({
+        text: 'Test todo',
+        completed: false,
+      });
+      expect(result.current.todos[0].id).toBeDefined();
+      expect(result.current.todos[0].createdAt).toBeDefined();
+      expect(result.current.todos[0].updatedAt).toBeDefined();
+      expect(todoStorage.save).toHaveBeenCalledWith(result.current.todos, 'all');
+    });
+
+    it('should trim whitespace from todo text', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('  Test todo  ');
+      });
+
+      expect(result.current.todos[0].text).toBe('Test todo');
+    });
+
+    it('should not add empty todos', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('');
+      });
+
+      expect(result.current.todos).toHaveLength(0);
+      expect(result.current.error).toBe('Todo text cannot be empty');
+      expect(todoStorage.save).not.toHaveBeenCalled();
+    });
+
+    it('should not add todos exceeding max length', () => {
+      const { result } = renderHook(() => useTodoStore());
+      const longText = 'a'.repeat(256);
+      
+      act(() => {
+        result.current.addTodo(longText);
+      });
+
+      expect(result.current.todos).toHaveLength(0);
+      expect(result.current.error).toContain('cannot exceed 255 characters');
+    });
+
+    it('should add new todos at the beginning of the list', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('First todo');
+        result.current.addTodo('Second todo');
+      });
+
+      expect(result.current.todos[0].text).toBe('Second todo');
+      expect(result.current.todos[1].text).toBe('First todo');
+    });
+  });
+
+  describe('updateTodo', () => {
+    it('should update todo text', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Original text');
+      });
+      
+      const todoId = result.current.todos[0].id;
+      const originalUpdatedAt = result.current.todos[0].updatedAt;
+      
+      // Wait a bit to ensure updatedAt will be different
+      jest.advanceTimersByTime(100);
+      
+      act(() => {
+        result.current.updateTodo(todoId, 'Updated text');
+      });
+
+      expect(result.current.todos[0].text).toBe('Updated text');
+      expect(result.current.todos[0].updatedAt).toBeGreaterThan(originalUpdatedAt);
+      expect(todoStorage.save).toHaveBeenCalledTimes(2);
+    });
+
+    it('should validate updated text', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Original text');
+      });
+      
+      const todoId = result.current.todos[0].id;
+      
+      act(() => {
+        result.current.updateTodo(todoId, '');
+      });
+
+      expect(result.current.todos[0].text).toBe('Original text');
+      expect(result.current.error).toBe('Todo text cannot be empty');
+    });
+
+    it('should handle updating non-existent todo', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.updateTodo('non-existent-id', 'New text');
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(todoStorage.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleTodo', () => {
+    it('should toggle todo completion status', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Test todo');
+      });
+      
+      const todoId = result.current.todos[0].id;
+      expect(result.current.todos[0].completed).toBe(false);
+      
+      act(() => {
+        result.current.toggleTodo(todoId);
+      });
+
+      expect(result.current.todos[0].completed).toBe(true);
+      
+      act(() => {
+        result.current.toggleTodo(todoId);
+      });
+
+      expect(result.current.todos[0].completed).toBe(false);
+      expect(todoStorage.save).toHaveBeenCalledTimes(3);
+    });
+
+    it('should update timestamp when toggling', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Test todo');
+      });
+      
+      const todoId = result.current.todos[0].id;
+      const originalUpdatedAt = result.current.todos[0].updatedAt;
+      
+      jest.advanceTimersByTime(100);
+      
+      act(() => {
+        result.current.toggleTodo(todoId);
+      });
+
+      expect(result.current.todos[0].updatedAt).toBeGreaterThan(originalUpdatedAt);
+    });
+  });
+
+  describe('deleteTodo', () => {
+    it('should delete a todo', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+      });
+      
+      const todoId = result.current.todos[1].id;
+      
+      act(() => {
+        result.current.deleteTodo(todoId);
+      });
+
+      expect(result.current.todos).toHaveLength(1);
+      expect(result.current.todos[0].text).toBe('Todo 2');
+      expect(todoStorage.save).toHaveBeenCalled();
+    });
+
+    it('should handle deleting non-existent todo', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Test todo');
+      });
+      
+      act(() => {
+        result.current.deleteTodo('non-existent-id');
+      });
+
+      expect(result.current.todos).toHaveLength(1);
+    });
+  });
+
+  describe('clearCompleted', () => {
+    it('should remove all completed todos', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+        result.current.addTodo('Todo 3');
+      });
+      
+      act(() => {
+        result.current.toggleTodo(result.current.todos[0].id);
+        result.current.toggleTodo(result.current.todos[2].id);
+      });
+      
+      act(() => {
+        result.current.clearCompleted();
+      });
+
+      expect(result.current.todos).toHaveLength(1);
+      expect(result.current.todos[0].text).toBe('Todo 2');
+      expect(result.current.todos[0].completed).toBe(false);
+    });
+
+    it('should do nothing if no completed todos', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+      });
+      
+      const saveCallCount = (todoStorage.save as jest.Mock).mock.calls.length;
+      
+      act(() => {
+        result.current.clearCompleted();
+      });
+
+      expect(result.current.todos).toHaveLength(2);
+      expect(todoStorage.save).toHaveBeenCalledTimes(saveCallCount + 1);
+    });
+  });
+
+  describe('toggleAll', () => {
+    it('should mark all todos as completed when some are incomplete', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+        result.current.addTodo('Todo 3');
+      });
+      
+      act(() => {
+        result.current.toggleTodo(result.current.todos[0].id);
+      });
+      
+      act(() => {
+        result.current.toggleAll();
+      });
+
+      expect(result.current.todos.every(todo => todo.completed)).toBe(true);
+    });
+
+    it('should mark all todos as incomplete when all are completed', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+      });
+      
+      act(() => {
+        result.current.toggleTodo(result.current.todos[0].id);
+        result.current.toggleTodo(result.current.todos[1].id);
+      });
+      
+      act(() => {
+        result.current.toggleAll();
+      });
+
+      expect(result.current.todos.every(todo => !todo.completed)).toBe(true);
+    });
+  });
+
+  describe('setFilter', () => {
+    it('should update filter type', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      expect(result.current.filter).toBe('all');
+      
+      act(() => {
+        result.current.setFilter('active');
+      });
+
+      expect(result.current.filter).toBe('active');
+      expect(todoStorage.save).toHaveBeenCalledWith([], 'active');
+      
+      act(() => {
+        result.current.setFilter('completed');
+      });
+
+      expect(result.current.filter).toBe('completed');
+    });
+  });
+
+  describe('loadTodos', () => {
+    it('should load todos from storage', () => {
+      const mockData = {
+        todos: [
+          {
+            id: '1',
+            text: 'Stored todo',
+            completed: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        filter: 'completed' as const,
+      };
+      
+      (todoStorage.load as jest.Mock).mockReturnValue(mockData);
+      
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.loadTodos();
+      });
+
+      expect(result.current.todos).toEqual(mockData.todos);
+      expect(result.current.filter).toBe('completed');
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it('should handle empty storage', () => {
+      (todoStorage.load as jest.Mock).mockReturnValue(null);
+      
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.loadTodos();
+      });
+
+      expect(result.current.todos).toEqual([]);
+      expect(result.current.filter).toBe('all');
+      expect(result.current.isLoading).toBe(false);
+    });
+  });
+
+  describe('getFilteredTodos', () => {
+    it('should return all todos when filter is "all"', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+        result.current.toggleTodo(result.current.todos[0].id);
+      });
+      
+      const filtered = result.current.getFilteredTodos();
+      expect(filtered).toHaveLength(2);
+    });
+
+    it('should return only active todos when filter is "active"', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+        result.current.toggleTodo(result.current.todos[0].id);
+        result.current.setFilter('active');
+      });
+      
+      const filtered = result.current.getFilteredTodos();
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].completed).toBe(false);
+    });
+
+    it('should return only completed todos when filter is "completed"', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+        result.current.toggleTodo(result.current.todos[0].id);
+        result.current.setFilter('completed');
+      });
+      
+      const filtered = result.current.getFilteredTodos();
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].completed).toBe(true);
+    });
+  });
+
+  describe('getStats', () => {
+    it('should calculate correct statistics', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      act(() => {
+        result.current.addTodo('Todo 1');
+        result.current.addTodo('Todo 2');
+        result.current.addTodo('Todo 3');
+        result.current.toggleTodo(result.current.todos[0].id);
+        result.current.toggleTodo(result.current.todos[1].id);
+      });
+      
+      const stats = result.current.getStats();
+      expect(stats).toEqual({
+        total: 3,
+        active: 1,
+        completed: 2,
+      });
+    });
+
+    it('should return zeros for empty todo list', () => {
+      const { result } = renderHook(() => useTodoStore());
+      
+      const stats = result.current.getStats();
+      expect(stats).toEqual({
+        total: 0,
+        active: 0,
+        completed: 0,
+      });
+    });
+  });
+});

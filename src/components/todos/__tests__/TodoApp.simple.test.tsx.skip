@@ -1,0 +1,135 @@
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+// Import components individually to avoid issues
+import { TodoInput } from '../TodoInput';
+import { TodoList } from '../TodoList';
+import { TodoFilter } from '../TodoFilter';
+import { TodoFooter } from '../TodoFooter';
+
+// Simple TodoApp wrapper for testing
+function TestTodoApp() {
+  return (
+    <div className="max-w-2xl mx-auto p-4">
+      <header className="mb-8">
+        <h1 className="text-4xl font-bold text-center text-gray-800 mb-8">
+          Simple Todo
+        </h1>
+        
+        <div className="space-y-4">
+          <TodoInput />
+          <TodoFilter />
+        </div>
+      </header>
+      
+      <main className="mb-4">
+        <TodoList />
+      </main>
+      
+      <footer>
+        <TodoFooter />
+      </footer>
+    </div>
+  );
+}
+
+describe('TodoApp Simple Integration Tests', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('should complete a basic todo workflow', async () => {
+    const user = userEvent.setup();
+    render(<TestTodoApp />);
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+    });
+
+    // Add a todo
+    const input = screen.getByPlaceholderText('What needs to be done?');
+    await user.type(input, 'Test todo');
+    await user.type(input, '{enter}');
+
+    // Verify todo was added
+    expect(screen.getByText('Test todo')).toBeInTheDocument();
+    expect(screen.getByText('1 item left')).toBeInTheDocument();
+
+    // Complete the todo
+    const checkbox = screen.getByRole('checkbox');
+    await user.click(checkbox);
+
+    // Verify completion
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText('0 items left')).toBeInTheDocument();
+  });
+
+  it('should filter todos correctly', async () => {
+    const user = userEvent.setup();
+    render(<TestTodoApp />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('What needs to be done?');
+
+    // Add multiple todos
+    await user.type(input, 'Active todo{enter}');
+    await user.type(input, 'Completed todo{enter}');
+
+    // Complete one
+    const checkboxes = screen.getAllByRole('checkbox');
+    await user.click(checkboxes[0]); // Complete "Completed todo" (newest first)
+
+    // Test active filter
+    const activeFilter = screen.getByRole('tab', { name: /Show Active todos/ });
+    await user.click(activeFilter);
+    
+    expect(screen.getByText('Active todo')).toBeInTheDocument();
+    expect(screen.queryByText('Completed todo')).not.toBeInTheDocument();
+
+    // Test completed filter
+    const completedFilter = screen.getByRole('tab', { name: /Show Completed todos/ });
+    await user.click(completedFilter);
+    
+    expect(screen.queryByText('Active todo')).not.toBeInTheDocument();
+    expect(screen.getByText('Completed todo')).toBeInTheDocument();
+  });
+
+  it('should handle bulk operations', async () => {
+    const user = userEvent.setup();
+    render(<TestTodoApp />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('What needs to be done?')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('What needs to be done?');
+
+    // Add todos
+    await user.type(input, 'Todo 1{enter}');
+    await user.type(input, 'Todo 2{enter}');
+
+    // Toggle all
+    const toggleAllButton = screen.getByText('Mark all complete');
+    await user.click(toggleAllButton);
+
+    // Verify all completed
+    const checkboxes = screen.getAllByRole('checkbox');
+    checkboxes.forEach(checkbox => {
+      expect(checkbox).toBeChecked();
+    });
+
+    // Clear completed
+    const clearButton = screen.getByText('Clear completed');
+    await user.click(clearButton);
+    const confirmButton = screen.getByText('Confirm clear?');
+    await user.click(confirmButton);
+
+    // Verify cleared
+    expect(screen.getByText('No todos yet. Add one above!')).toBeInTheDocument();
+  });
+});

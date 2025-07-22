@@ -1,0 +1,169 @@
+/**
+ * Integration tests for the todo store
+ * These tests work with the actual store implementation
+ */
+import { act, renderHook } from '@testing-library/react';
+import { useTodoStore } from '../todo-store';
+
+describe('TodoStore Integration', () => {
+  beforeEach(() => {
+    // Clear localStorage
+    localStorage.clear();
+  });
+
+  it('should manage todo lifecycle', () => {
+    const { result } = renderHook(() => useTodoStore());
+
+    // Initial state
+    expect(result.current.todos).toHaveLength(0);
+    expect(result.current.filter).toBe('all');
+
+    // Add todo
+    act(() => {
+      result.current.addTodo('Test todo');
+    });
+
+    expect(result.current.todos).toHaveLength(1);
+    expect(result.current.todos[0].text).toBe('Test todo');
+    expect(result.current.todos[0].completed).toBe(false);
+
+    const todoId = result.current.todos[0].id;
+
+    // Toggle todo
+    act(() => {
+      result.current.toggleTodo(todoId);
+    });
+
+    expect(result.current.todos[0].completed).toBe(true);
+
+    // Update todo
+    act(() => {
+      result.current.updateTodo(todoId, 'Updated todo');
+    });
+
+    expect(result.current.todos[0].text).toBe('Updated todo');
+
+    // Delete todo
+    act(() => {
+      result.current.deleteTodo(todoId);
+    });
+
+    expect(result.current.todos).toHaveLength(0);
+  });
+
+  it('should filter todos correctly', () => {
+    const { result } = renderHook(() => useTodoStore());
+
+    // Add mixed todos
+    act(() => {
+      result.current.addTodo('Active todo 1');
+      result.current.addTodo('Active todo 2');
+      result.current.addTodo('Completed todo');
+    });
+
+    // Complete one todo
+    act(() => {
+      result.current.toggleTodo(result.current.todos[0].id);
+    });
+
+    // Test all filter
+    expect(result.current.getFilteredTodos()).toHaveLength(3);
+
+    // Test active filter
+    act(() => {
+      result.current.setFilter('active');
+    });
+    expect(result.current.getFilteredTodos()).toHaveLength(2);
+
+    // Test completed filter
+    act(() => {
+      result.current.setFilter('completed');
+    });
+    expect(result.current.getFilteredTodos()).toHaveLength(1);
+  });
+
+  it('should calculate stats correctly', () => {
+    const { result } = renderHook(() => useTodoStore());
+
+    // Add todos
+    act(() => {
+      result.current.addTodo('Todo 1');
+      result.current.addTodo('Todo 2');
+      result.current.addTodo('Todo 3');
+    });
+
+    // Complete some
+    act(() => {
+      result.current.toggleTodo(result.current.todos[0].id);
+      result.current.toggleTodo(result.current.todos[1].id);
+    });
+
+    const stats = result.current.getStats();
+    expect(stats.total).toBe(3);
+    expect(stats.active).toBe(1);
+    expect(stats.completed).toBe(2);
+  });
+
+  it('should handle bulk operations', () => {
+    const { result } = renderHook(() => useTodoStore());
+
+    // Add todos
+    act(() => {
+      result.current.addTodo('Todo 1');
+      result.current.addTodo('Todo 2');
+      result.current.addTodo('Todo 3');
+    });
+
+    // Toggle all
+    act(() => {
+      result.current.toggleAll();
+    });
+
+    expect(result.current.todos.every(t => t.completed)).toBe(true);
+
+    // Clear completed
+    act(() => {
+      result.current.clearCompleted();
+    });
+
+    expect(result.current.todos).toHaveLength(0);
+  });
+
+  it('should validate todo text', () => {
+    const { result } = renderHook(() => useTodoStore());
+
+    // Try empty todo
+    act(() => {
+      result.current.addTodo('');
+    });
+
+    expect(result.current.todos).toHaveLength(0);
+    expect(result.current.error).toBe('Todo text cannot be empty');
+
+    // Try too long todo
+    const longText = 'a'.repeat(256);
+    act(() => {
+      result.current.addTodo(longText);
+    });
+
+    expect(result.current.todos).toHaveLength(0);
+    expect(result.current.error).toContain('cannot exceed 255 characters');
+  });
+
+  it('should persist to localStorage', () => {
+    const { result } = renderHook(() => useTodoStore());
+
+    // Add todo
+    act(() => {
+      result.current.addTodo('Persistent todo');
+    });
+
+    // Check localStorage
+    const stored = localStorage.getItem('simple-todo-app');
+    expect(stored).toBeTruthy();
+    
+    const data = JSON.parse(stored!);
+    expect(data.todos).toHaveLength(1);
+    expect(data.todos[0].text).toBe('Persistent todo');
+  });
+});

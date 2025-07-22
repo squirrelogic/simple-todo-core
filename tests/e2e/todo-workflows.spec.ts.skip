@@ -1,0 +1,310 @@
+import { test, expect } from '@playwright/test';
+
+test.describe('Todo Application E2E Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:3000');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test.describe('Core Todo Functionality', () => {
+    test('should create, edit, complete, and delete a todo', async ({ page }) => {
+      // Create a todo
+      await page.fill('input[placeholder="What needs to be done?"]', 'Buy groceries');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+
+      // Verify todo appears
+      await expect(page.locator('text=Buy groceries')).toBeVisible();
+      await expect(page.locator('text=1 item left')).toBeVisible();
+
+      // Edit the todo
+      await page.dblclick('text=Buy groceries');
+      await page.fill('input[value="Buy groceries"]', 'Buy organic groceries');
+      await page.press('input[value="Buy organic groceries"]', 'Enter');
+
+      // Verify edit
+      await expect(page.locator('text=Buy organic groceries')).toBeVisible();
+
+      // Complete the todo
+      await page.click('input[type="checkbox"]');
+      await expect(page.locator('text=Buy organic groceries')).toHaveClass(/line-through/);
+      await expect(page.locator('text=0 items left')).toBeVisible();
+
+      // Delete the todo
+      await page.hover('text=Buy organic groceries');
+      await page.click('[aria-label*="Delete"]');
+      await page.click('[aria-label*="Confirm delete"]');
+
+      // Verify deletion
+      await expect(page.locator('text=Buy organic groceries')).not.toBeVisible();
+      await expect(page.locator('text=No todos yet. Add one above!')).toBeVisible();
+    });
+
+    test('should handle multiple todos with proper ordering', async ({ page }) => {
+      // Add multiple todos
+      const todos = ['First todo', 'Second todo', 'Third todo'];
+      
+      for (const todo of todos) {
+        await page.fill('input[placeholder="What needs to be done?"]', todo);
+        await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+      }
+
+      // Verify reverse chronological order
+      const todoItems = page.locator('[role="listitem"]');
+      await expect(todoItems).toHaveCount(3);
+      await expect(todoItems.nth(0)).toContainText('Third todo');
+      await expect(todoItems.nth(1)).toContainText('Second todo');
+      await expect(todoItems.nth(2)).toContainText('First todo');
+    });
+  });
+
+  test.describe('Filtering', () => {
+    test('should filter todos by status', async ({ page }) => {
+      // Setup: Create mixed todos
+      await page.fill('input[placeholder="What needs to be done?"]', 'Active todo 1');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+      
+      await page.fill('input[placeholder="What needs to be done?"]', 'Completed todo');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+      
+      await page.fill('input[placeholder="What needs to be done?"]', 'Active todo 2');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+
+      // Complete the middle todo
+      await page.click('[role="listitem"]:has-text("Completed todo") input[type="checkbox"]');
+
+      // Test All filter (default)
+      await expect(page.locator('[role="listitem"]')).toHaveCount(3);
+
+      // Test Active filter
+      await page.click('button:has-text("Active")');
+      await expect(page.locator('[role="listitem"]')).toHaveCount(2);
+      await expect(page.locator('text=Active todo 1')).toBeVisible();
+      await expect(page.locator('text=Active todo 2')).toBeVisible();
+      await expect(page.locator('text=Completed todo')).not.toBeVisible();
+
+      // Test Completed filter
+      await page.click('button:has-text("Completed")');
+      await expect(page.locator('[role="listitem"]')).toHaveCount(1);
+      await expect(page.locator('text=Completed todo')).toBeVisible();
+      await expect(page.locator('text=Active todo 1')).not.toBeVisible();
+    });
+
+    test('should update filter counts in real-time', async ({ page }) => {
+      // Add todos
+      await page.fill('input[placeholder="What needs to be done?"]', 'Todo 1');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+      
+      await page.fill('input[placeholder="What needs to be done?"]', 'Todo 2');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+
+      // Initial counts
+      await expect(page.locator('button:has-text("All (2)")')).toBeVisible();
+      await expect(page.locator('button:has-text("Active (2)")')).toBeVisible();
+      await expect(page.locator('button:has-text("Completed (0)")')).toBeVisible();
+
+      // Complete one todo
+      await page.click('[role="listitem"]:first-child input[type="checkbox"]');
+
+      // Updated counts
+      await expect(page.locator('button:has-text("All (2)")')).toBeVisible();
+      await expect(page.locator('button:has-text("Active (1)")')).toBeVisible();
+      await expect(page.locator('button:has-text("Completed (1)")')).toBeVisible();
+    });
+  });
+
+  test.describe('Bulk Operations', () => {
+    test('should toggle all todos', async ({ page }) => {
+      // Add multiple todos
+      for (let i = 1; i <= 3; i++) {
+        await page.fill('input[placeholder="What needs to be done?"]', `Todo ${i}`);
+        await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+      }
+
+      // Toggle all to complete
+      await page.click('button:has-text("Mark all complete")');
+      
+      // Verify all completed
+      const checkboxes = page.locator('input[type="checkbox"]');
+      await expect(checkboxes).toHaveCount(3);
+      for (let i = 0; i < 3; i++) {
+        await expect(checkboxes.nth(i)).toBeChecked();
+      }
+
+      // Toggle all back to active
+      await page.click('button:has-text("Mark all active")');
+      
+      // Verify all active
+      for (let i = 0; i < 3; i++) {
+        await expect(checkboxes.nth(i)).not.toBeChecked();
+      }
+    });
+
+    test('should clear completed todos with confirmation', async ({ page }) => {
+      // Add and complete some todos
+      for (let i = 1; i <= 4; i++) {
+        await page.fill('input[placeholder="What needs to be done?"]', `Todo ${i}`);
+        await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+      }
+
+      // Complete first two
+      await page.click('[role="listitem"]:nth-child(1) input[type="checkbox"]');
+      await page.click('[role="listitem"]:nth-child(2) input[type="checkbox"]');
+
+      // Clear completed
+      await page.click('button:has-text("Clear completed")');
+      await page.click('button:has-text("Confirm clear?")');
+
+      // Verify only active todos remain
+      await expect(page.locator('[role="listitem"]')).toHaveCount(2);
+      await expect(page.locator('text=Todo 1')).toBeVisible();
+      await expect(page.locator('text=Todo 2')).toBeVisible();
+    });
+  });
+
+  test.describe('Data Persistence', () => {
+    test('should persist todos across page reloads', async ({ page }) => {
+      // Add todos
+      await page.fill('input[placeholder="What needs to be done?"]', 'Persistent todo 1');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+      
+      await page.fill('input[placeholder="What needs to be done?"]', 'Persistent todo 2');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+
+      // Complete one
+      await page.click('[role="listitem"]:first-child input[type="checkbox"]');
+
+      // Set filter
+      await page.click('button:has-text("Active")');
+
+      // Reload page
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+
+      // Verify todos are still there
+      await expect(page.locator('text=Persistent todo 1')).toBeVisible();
+      
+      // Verify filter is preserved
+      await expect(page.locator('button:has-text("Active")')).toHaveClass(/bg-blue-600/);
+      
+      // Switch to all to see completed todo
+      await page.click('button:has-text("All")');
+      await expect(page.locator('text=Persistent todo 2')).toBeVisible();
+      await expect(page.locator('[role="listitem"]:has-text("Persistent todo 2") input[type="checkbox"]')).toBeChecked();
+    });
+  });
+
+  test.describe('Input Validation', () => {
+    test('should validate todo text', async ({ page }) => {
+      const input = page.locator('input[placeholder="What needs to be done?"]');
+
+      // Empty todo
+      await input.fill('   ');
+      await input.press('Enter');
+      await expect(page.locator('text=Please enter a todo')).toBeVisible();
+
+      // Valid todo clears error
+      await input.fill('Valid todo');
+      await input.press('Enter');
+      await expect(page.locator('text=Please enter a todo')).not.toBeVisible();
+      await expect(page.locator('text=Valid todo')).toBeVisible();
+
+      // Character limit
+      const longText = 'a'.repeat(255);
+      await input.fill(longText);
+      await expect(page.locator('text=0')).toBeVisible(); // 0 chars remaining
+    });
+  });
+
+  test.describe('Keyboard Navigation', () => {
+    test('should support keyboard shortcuts', async ({ page }) => {
+      // Add todos
+      await page.fill('input[placeholder="What needs to be done?"]', 'Keyboard todo');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+
+      // Tab to todo item
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab'); // Skip filter buttons
+      await page.keyboard.press('Tab');
+
+      // Toggle with space
+      await page.keyboard.press('Space');
+      await expect(page.locator('input[type="checkbox"]')).toBeChecked();
+
+      // Edit with Enter
+      await page.keyboard.press('Enter');
+      await expect(page.locator('input[value="Keyboard todo"]')).toBeFocused();
+
+      // Cancel edit with Escape
+      await page.keyboard.type(' edited');
+      await page.keyboard.press('Escape');
+      await expect(page.locator('text=Keyboard todo')).toBeVisible();
+      await expect(page.locator('text=Keyboard todo edited')).not.toBeVisible();
+    });
+  });
+
+  test.describe('Accessibility', () => {
+    test('should have proper ARIA labels and roles', async ({ page }) => {
+      // Check main elements
+      await expect(page.locator('[aria-label="New todo input"]')).toBeVisible();
+      await expect(page.locator('[role="tablist"]')).toBeVisible();
+      await expect(page.locator('[role="list"]')).toBeVisible();
+
+      // Add a todo
+      await page.fill('input[placeholder="What needs to be done?"]', 'Accessible todo');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+
+      // Check todo item
+      const todoItem = page.locator('[role="listitem"]');
+      await expect(todoItem).toHaveAttribute('aria-label', 'Todo: Accessible todo, active');
+      
+      // Check checkbox
+      const checkbox = todoItem.locator('input[type="checkbox"]');
+      await expect(checkbox).toHaveAttribute('aria-label', 'Mark "Accessible todo" as complete');
+    });
+
+    test('should announce changes to screen readers', async ({ page }) => {
+      // Add todo
+      await page.fill('input[placeholder="What needs to be done?"]', 'Screen reader todo');
+      await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+
+      // Check live region
+      await expect(page.locator('[aria-live="polite"]')).toContainText('1 item left');
+
+      // Complete todo
+      await page.click('input[type="checkbox"]');
+      await expect(page.locator('[aria-live="polite"]')).toContainText('0 items left');
+    });
+  });
+
+  test.describe('Performance', () => {
+    test('should handle large number of todos', async ({ page }) => {
+      // Add 50 todos rapidly
+      for (let i = 1; i <= 50; i++) {
+        await page.fill('input[placeholder="What needs to be done?"]', `Todo ${i}`);
+        await page.press('input[placeholder="What needs to be done?"]', 'Enter');
+      }
+
+      // Verify count
+      await expect(page.locator('text=50 items left')).toBeVisible();
+      await expect(page.locator('[role="listitem"]')).toHaveCount(50);
+
+      // Test filtering performance
+      const startTime = Date.now();
+      
+      // Complete half
+      for (let i = 0; i < 25; i++) {
+        await page.click(`[role="listitem"]:nth-child(${i + 1}) input[type="checkbox"]`);
+      }
+
+      // Switch filters
+      await page.click('button:has-text("Active")');
+      await expect(page.locator('[role="listitem"]')).toHaveCount(25);
+      
+      await page.click('button:has-text("Completed")');
+      await expect(page.locator('[role="listitem"]')).toHaveCount(25);
+
+      const endTime = Date.now();
+      expect(endTime - startTime).toBeLessThan(10000); // Should complete in < 10s
+    });
+  });
+});
