@@ -11,23 +11,25 @@ simple-todo/
 ├── .devcontainer/         # Dev container configuration
 ├── .github/               # GitHub configuration
 │   └── workflows/         # CI/CD workflows
-├── build/                 # Build artifacts
-├── designs/               # Architecture and design documents
-├── dist/                  # Distribution files
 ├── docs/                  # Documentation
 │   ├── ARCHITECTURE.md    # System architecture
 │   ├── CONTRIBUTING.md    # Contribution guidelines
 │   └── DEVELOPMENT.md     # Developer setup guide
 ├── plans/                 # Technical implementation plans
-├── scripts/               # Utility scripts
 ├── specs/                 # Feature specifications
-├── src/                   # Source code
+├── src/                   # Next.js application source code
+│   ├── app/               # Next.js app directory
+│   ├── public/            # Static assets
+│   ├── types/             # TypeScript type definitions
+│   ├── package.json       # Application dependencies
+│   └── ...                # Next.js config files
 ├── stories/               # User stories
-├── tests/                 # Test files
+├── tests/                 # Integration tests
 ├── .editorconfig          # Editor configuration
 ├── .env.example           # Environment variables template
 ├── .gitignore             # Git ignore rules
 ├── LICENSE                # Project license
+├── package.json           # Root project scripts
 └── README.md              # This file
 ```
 
@@ -46,19 +48,25 @@ git clone <repository-url>
 cd simple-todo
 ```
 
-2. Install dependencies
+2. Navigate to the source directory
+```bash
+cd src
+```
+
+3. Install dependencies
 ```bash
 npm install
 ```
 
-3. Copy environment variables
+4. Copy environment variables
 ```bash
-cp .env.example .env
+cp ../.env.example .env
 ```
 
-4. Run the development server
+5. Run the development server
 ```bash
 npm run dev
+# or from root directory: npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
